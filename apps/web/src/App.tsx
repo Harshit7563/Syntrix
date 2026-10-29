@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {Login,Register} from './pages/Auth';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground} from './pages/Merchant';import {AdminDashboard,AdminMerchants,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs} from './pages/Admin';import {Settings} from './pages/Settings';
+import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {Login} from './pages/Auth';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground} from './pages/Merchant';import {AdminDashboard,AdminMerchants,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs} from './pages/Admin';import {Settings} from './pages/Settings';
 
 const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']);
 const isStaff=(role?:string)=>!!role&&STAFF.has(role);
@@ -154,7 +154,7 @@ export default function App(){
   return <Routes>
     <Route path="/" element={<Navigate to="/login"/>}/>
     <Route path="/login" element={<Login/>}/>
-    <Route path="/register" element={<Register/>}/>
+    <Route path="/register" element={<Navigate to="/login" replace/>}/>
     <Route path="/app/*" element={<Shell/>}/>
     <Route path="/admin/*" element={<Navigate to="/app" replace/>}/>
   </Routes>;

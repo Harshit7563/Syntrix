@@ -15,7 +15,6 @@ export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<
 
  if(step==='email') return <AuthShell><h1 className="font-display text-[28px] leading-tight font-extrabold tracking-tight text-[#1b1b1b]">Admin sign in</h1><p className="text-sm text-[#605e5c] mt-1.5">to continue to <span className="font-semibold text-[#1b1b1b]">SyntrixAPI</span> platform</p>{err&&<Alert>{err}</Alert>}
   <form onSubmit={next} className="mt-6"><input className={msInput} type="email" autoFocus autoComplete="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Email address"/></form>
-  <p className="text-[13.5px] text-[#3b3a39] mt-6">Merchant account? <a className={msLink+" font-semibold"} href="/register">Create one</a></p>
   <div className="flex justify-end mt-9"><button className={msBtn} onClick={next}>Next</button></div></AuthShell>;
 
  if(step==='pin') return <AuthShell>
@@ -34,16 +33,6 @@ export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<
    <p className="text-[13px]"><span className={msLink} onClick={()=>setErr('Demo environment: use password Demo@12345, or ask your admin to reset it from Settings.')}>Forgot password?</span></p>
    <div className="flex justify-end pt-1"><button className={msBtn} disabled={busy}>{busy?'Signing in…':'Sign in'}</button></div>
   </form></AuthShell>; }
-
-export function Register(){ const nav=useNavigate(); const [f,setF]=useState({email:'',password:'',businessName:''}); const [err,setErr]=useState(''); const [busy,setBusy]=useState(false); const [show,setShow]=useState(false); const submit=async(e:any)=>{ e.preventDefault(); setErr(''); setBusy(true); try{ await api('/auth/register',{method:'POST',body:f}); nav('/app/onboarding'); }catch(e:any){ setErr(e.message); setBusy(false); } };
- return <AuthShell><h1 className="font-display text-[28px] leading-tight font-extrabold tracking-tight text-[#1b1b1b]">Create account</h1><p className="text-sm text-[#605e5c] mt-1.5">Sandbox access is instant. Production needs compliance approval.</p>{err&&<Alert>{err}</Alert>}
- <form onSubmit={submit} className="mt-6 space-y-5">
-  <input className={msInput} value={f.businessName} onChange={e=>setF({...f,businessName:e.target.value})} placeholder="Business name"/>
-  <input className={msInput} type="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Work email"/>
-  <div><input type={show?'text':'password'} className={msInput} value={f.password} onChange={e=>setF({...f,password:e.target.value})} placeholder="Password (10+ characters)"/><label className="flex items-center gap-2 mt-3 text-[13px] text-[#1b1b1b] cursor-pointer select-none"><input type="checkbox" checked={show} onChange={e=>setShow(e.target.checked)} className="w-4 h-4 accent-[#0067c0]"/>Show password</label>{f.password&&<div className="flex gap-1 mt-3">{[1,2,3,4].map(i=><span key={i} className={`h-1 flex-1 ${f.password.length>=i*3?'bg-[#107c41]':'bg-[#edebe9]'}`}/>)}</div>}</div>
-  <div className="flex justify-end pt-1"><button className={msBtn} disabled={busy}>{busy?'Creating…':'Next'}</button></div>
- </form>
- <p className="text-[13px] text-[#1b1b1b] mt-7">Already have an account? <a className={msLink} href="/login">Sign in</a></p></AuthShell>; }
 
 export const Alert=({children}:{children:any})=><div className="mt-4 bg-[#fde7e9] border border-[#f1707b]/40 text-[#a4262c] text-[13px] px-3.5 py-2.5 flex gap-2"><span className="shrink-0">⚠</span><span>{children}</span></div>;
 
