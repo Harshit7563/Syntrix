@@ -9,3 +9,6 @@ dump.rdb
 .pg.log
 *.rdb
 .DS_Store
+__pycache__/
+*.pyc
+*.tsbuildinfo
