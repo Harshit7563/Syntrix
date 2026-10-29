@@ -38,19 +38,23 @@ services:
       STORAGE_DRIVER: local
       LOCAL_STORAGE_PATH: /data/uploads
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://201.18.196.182:8080}
+      API_PORT: "3001"
     volumes:
       - uploads:/data/uploads
+    ports:
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: sh -c "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/main.js"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
       interval: 10s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 12
+      start_period: 40s
   worker:
     build:
       context: .
@@ -70,6 +74,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     command: node dist/worker.js
   web:
     build:
@@ -78,7 +83,9 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 volumes:
   pgdata: {}
   redisdata: {}
