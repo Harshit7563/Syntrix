@@ -37,9 +37,9 @@ services:
       REDIS_URL: redis://redis:6379
       STORAGE_DRIVER: local
       LOCAL_STORAGE_PATH: /data/uploads
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://201.18.196.182:8080}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://201.18.196.182:8080}
-      COOKIE_SECURE: "false"
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://syntrixapi.in}
+      WEB_ORIGIN: ${WEB_ORIGIN:-https://syntrixapi.in,https://www.syntrixapi.in}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       API_PORT: "3001"
     volumes:
       - uploads:/data/uploads
@@ -83,8 +83,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "8080:80"
       - "80:80"
+      - "443:443"
+      - "8080:80"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       api:
         condition: service_healthy
