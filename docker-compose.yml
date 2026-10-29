@@ -26,18 +26,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-  minio:
-    build:
-      context: .
-      dockerfile: apps/minio/Dockerfile
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin_dev_pw}
-    volumes:
-      - miniodata:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
   api:
     build:
       context: .
@@ -47,7 +35,11 @@ services:
     environment:
       DATABASE_URL: postgresql://syntrix:syntrix_dev_pw@postgres:5432/syntrix?schema=public
       REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_PATH: /data/uploads
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://201.18.196.182:8080}
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,8 +60,11 @@ services:
     environment:
       DATABASE_URL: postgresql://syntrix:syntrix_dev_pw@postgres:5432/syntrix?schema=public
       REDIS_URL: redis://redis:6379
-      S3_ENDPOINT: http://minio:9000
+      STORAGE_DRIVER: local
+      LOCAL_STORAGE_PATH: /data/uploads
       PROCESS_ROLE: worker
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,4 +82,4 @@ services:
 volumes:
   pgdata: {}
   redisdata: {}
-  miniodata: {}
+  uploads: {}
