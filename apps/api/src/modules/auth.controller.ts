@@ -1,6 +1,12 @@
 import { Body, Controller, Get, Post, Req, Res, UseGuards, BadRequestException, UnauthorizedException } from '@nestjs/common'; import { ApiTags } from '@nestjs/swagger'; import { PrismaService } from '../prisma.service'; import * as bcrypt from 'bcryptjs'; import * as jwt from 'jsonwebtoken'; import * as crypto from 'crypto'; import { sha256, totp } from '../common/core'; import { AuthGuard, CurrentUser } from '../common/guards';
 const ACCESS_SECRET=()=>process.env.JWT_ACCESS_SECRET||'dev-access-secret-change-me-32ch';
-function cookies(res:any, access:string, refresh:string){ const secure=process.env.NODE_ENV==='production'; res.cookie('sx_access',access,{httpOnly:true,secure,sameSite:'lax',maxAge:15*60*1000,path:'/'}); res.cookie('sx_refresh',refresh,{httpOnly:true,secure,sameSite:'lax',maxAge:7*24*3600*1000,path:'/'}); }
+function cookies(res:any, access:string, refresh:string){
+  // Secure cookies only when explicitly enabled (needs HTTPS). Plain HTTP Hostinger deploy must keep this false.
+  const secure=process.env.COOKIE_SECURE==='true';
+  const common={httpOnly:true,secure,sameSite:'lax' as const,path:'/'};
+  res.cookie('sx_access',access,{...common,maxAge:15*60*1000});
+  res.cookie('sx_refresh',refresh,{...common,maxAge:7*24*3600*1000});
+}
 @ApiTags('auth') @Controller('auth') export class AuthController { constructor(private p: PrismaService){}
  @Post('register') async register(@Body() b:any, @Res({passthrough:true}) res:any){ if(!b.email||!b.password||b.password.length<10) throw new BadRequestException('Email and a 10+ character password are required'); const email=String(b.email).trim().toLowerCase(); if(await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}})) throw new BadRequestException('An account with this email already exists — try logging in');
   const user=await this.p.$transaction(async tx=>{ const u=await tx.user.create({data:{email,phone:b.phone,passwordHash:await bcrypt.hash(b.password,12)}}); const org=await tx.organization.create({data:{name:b.businessName||'My Business'}}); await tx.membership.create({data:{userId:u.id,orgId:org.id,role:'MERCHANT_OWNER'}}); await tx.merchantProfile.create({data:{orgId:org.id,businessName:b.businessName}}); return u; }); return this.issue(user,res); }

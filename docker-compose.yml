@@ -38,6 +38,8 @@ services:
       STORAGE_DRIVER: local
       LOCAL_STORAGE_PATH: /data/uploads
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://201.18.196.182:8080}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://201.18.196.182:8080}
+      COOKIE_SECURE: "false"
       API_PORT: "3001"
     volumes:
       - uploads:/data/uploads
@@ -82,6 +84,7 @@ services:
       dockerfile: apps/web/Dockerfile
     ports:
       - "8080:80"
+      - "80:80"
     depends_on:
       api:
         condition: service_healthy
