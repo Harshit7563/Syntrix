@@ -1,0 +1,8 @@
+import { Injectable } from '@nestjs/common'; import { assertBalanced, Entry } from '../common/core';
+@Injectable() export class LedgerService {
+ async account(tx:any, merchantId:string|null, code:string, kind:string){ if(!merchantId){ const ex=await tx.ledgerAccount.findFirst({where:{merchantId:null,code}}); return ex||tx.ledgerAccount.create({data:{merchantId:null,code,kind}}); } return tx.ledgerAccount.upsert({where:{merchantId_code:{merchantId,code}},create:{merchantId,code,kind},update:{}}); }
+ /** Post a balanced, immutable double-entry transaction. Entries are never updated/deleted. */
+ async post(tx:any, ref:string, description:string, entries:(Entry&{merchantId:string|null,kind:string})[]){ assertBalanced(entries); const existing=await tx.ledgerTransaction.findUnique({where:{ref}}); if(existing) return existing; const lt=await tx.ledgerTransaction.create({data:{ref,description}}); for(const e of entries){ const acc=await this.account(tx,e.merchantId,e.account,e.kind); await tx.ledgerEntry.create({data:{ledgerTxnId:lt.id,accountId:acc.id,debitPaise:BigInt(e.debit),creditPaise:BigInt(e.credit)}}); } return lt; }
+ async balance(prisma:any, merchantId:string, code:string): Promise<number> { const acc=merchantId?await prisma.ledgerAccount.findUnique({where:{merchantId_code:{merchantId,code}}}):await prisma.ledgerAccount.findFirst({where:{merchantId:null,code}}); if(!acc) return 0; const es=await prisma.ledgerEntry.findMany({where:{accountId:acc.id}}); return es.reduce((a:number,e:any)=>a+Number(e.creditPaise)-Number(e.debitPaise),0); }
+}
+export const acct=(mid:string,kind:string)=>`merchant:${mid}:${kind.toLowerCase()}`;

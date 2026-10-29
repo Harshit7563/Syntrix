@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+coverage/
+apps/web/dist/
+dump.rdb
+.pgdata/
+.pg.log
+*.rdb
+.DS_Store

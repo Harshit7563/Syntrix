@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-21",
+  "generatedAt": "2026-10-21T18:06:38",
+  "totalTransactions": 14,
+  "success": 13,
+  "failed": 1,
+  "stuckResolved": 0,
+  "stuckRemaining": 0,
+  "payinSuccessPaise": 1619400,
+  "payoutSuccessPaise": 17500,
+  "feesPaise": 32738,
+  "alerts": []
+}

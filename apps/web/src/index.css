@@ -1,0 +1,20 @@
+@tailwind base;@tailwind components;@tailwind utilities;
+html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-family:'Plus Jakarta Sans',Inter,system-ui,-apple-system,'Segoe UI',sans-serif;background:#e8eaef;color:#0f172a;letter-spacing:-.011em}
+p,span,div,td,th,li,a,button,input,select,textarea{font-variant-numeric:tabular-nums lining-nums}
+h1,h2,h3,.font-display{font-family:'Plus Jakarta Sans',Inter,system-ui,sans-serif;letter-spacing:-.022em}
+b,strong{font-weight:600}
+.card{@apply bg-white rounded-[24px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.04)] p-5;}
+.btn{@apply inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-black disabled:opacity-50 transition;}
+.btn-ghost{@apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 transition;}
+.input{@apply w-full rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 bg-white;}
+.label{@apply block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide;}
+.badge{@apply inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold;}
+.tnum{font-variant-numeric:tabular-nums lining-nums;font-feature-settings:'tnum'}
+.kpi{@apply rounded-[22px] px-4 py-4 min-h-[108px] flex flex-col justify-between;}
+.kpi-peach{@apply kpi bg-[#f8d5c8] text-slate-900;}
+.kpi-mint{@apply kpi bg-[#d8f0e2] text-slate-900;}
+.kpi-sky{@apply kpi bg-[#d6e8f7] text-slate-900;}
+.kpi-lilac{@apply kpi bg-[#e4daf5] text-slate-900;}
+.kpi-ink{@apply kpi bg-slate-900 text-white;}
+.panel{@apply bg-white rounded-[24px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5;}
