@@ -510,7 +510,7 @@ export function AdminTxns({kind}:{kind?:string}={}){
   const tabs=kind
     ? ([['ALL','Overview'],['CAPTURED','Captured'],['CREATED','Pending'],['FAILED','Failed']] as const)
     : ([['ALL','Overview'],['PAYIN','Pay-in'],['PAYOUT','Payout'],['FAILED','Failed']] as const);
-  const onTab=(k:string)=>{ if(!kind&&(k==='PAYIN'||k==='PAYOUT'||k==='ALL')){ setTypeBtn(k as any); setStatusTab(k==='FAILED'?'FAILED':'ALL'); } else setStatusTab(k); setPage(1); };
+  const onTab=(k:string)=>{ if(!kind){ if(k==='FAILED') setStatusTab('FAILED'); else if(k==='PAYIN'||k==='PAYOUT'||k==='ALL'){ setTypeBtn(k as any); setStatusTab('ALL'); } } else setStatusTab(k); setPage(1); };
   const tabActive=(k:string)=> kind?statusTab===k:(k==='FAILED'?statusTab==='FAILED':statusTab!=='FAILED'&&typeBtn===k);
   /** Transactions page: same layouts as Pay-in / Payout pages (Overview defaults to payout columns). */
   const tableKind=kind||(typeBtn==='PAYIN'?'PAYIN':'PAYOUT');
