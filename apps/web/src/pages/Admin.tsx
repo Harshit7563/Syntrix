@@ -43,7 +43,7 @@ export function AdminDashboard(){
       <div className="kpi-mint"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{fmt(po.totalAmountPaise)}</p><span className="text-[11px] font-semibold text-emerald-700">↑ Payout</span></div><p className="text-[12.5px] font-semibold mt-3">Total Payout</p><p className="text-[11px] text-slate-500">{inr(po.totalAmountPaise)}</p></div>
       <div className="kpi-sky"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{(d.transactions||0).toLocaleString('en-IN')}</p><span className="text-[11px] font-semibold text-slate-600">txns</span></div><p className="text-[12.5px] font-semibold mt-3">Transactions</p><p className="text-[11px] text-slate-500">platform wide</p></div>
       <div className="kpi-lilac"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{d.avgProviderLatencyMs||0}</p><span className="text-[11px] font-semibold text-slate-600">ms</span></div><p className="text-[12.5px] font-semibold mt-3">Avg latency</p><p className="text-[11px] text-slate-500">provider round-trip</p></div>
-      <div className="kpi-ink"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{d.successRate??0}%</p><span className="text-[11px] font-semibold text-emerald-400">SR</span></div><p className="text-[12.5px] font-semibold mt-3 text-white/80">Success rate</p><p className="text-[11px] text-white/45">captured / attempted</p></div>
+      <div className="kpi-ink"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{d.successRate==null?'—':d.successRate+'%'}</p><span className="text-[11px] font-semibold text-emerald-400">SR</span></div><p className="text-[12.5px] font-semibold mt-3 text-white/80">Success rate</p><p className="text-[11px] text-white/45">captured / attempted</p></div>
     </div>
     <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-4 mb-5">
       <div className="panel">
@@ -145,7 +145,7 @@ function ApiSwitch(){
     const dirty=!!draft[draftKey(pr.id,pc)];
     const circ=!!pr.circuitOpen;
     const sc=st?.successCount||0, fl=st?.failedCount||0;
-    const rate=(sc+fl)?Math.round(sc/(sc+fl)*100):100;
+    const rate=(sc+fl)?Math.round(sc/(sc+fl)*100):null;
     return <div className={`bg-white rounded-[22px] border shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4 flex flex-col ${circ?'border-amber-300':'border-slate-200/70'}`}>
       <div className="flex items-start gap-3">
         <span className="w-11 h-11 rounded-2xl text-white grid place-items-center text-[14px] font-extrabold shrink-0" style={{background:avatars[idx%avatars.length]}}>{(pr.name||'?').charAt(0)}</span>
@@ -169,7 +169,7 @@ function ApiSwitch(){
       <div className="grid grid-cols-3 gap-2 mt-3">
         <div className="rounded-2xl bg-[#fdf0ea] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{fmtShort(st?.totalAmountPaise||0)}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Total</p></div>
         <div className="rounded-2xl bg-[#eaf7f0] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{fmtShort(st?.todayAmountPaise||0)}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Today</p></div>
-        <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${rate>=80?'text-emerald-600':'text-amber-600'}`}>{rate}%</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
+        <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${rate==null?'text-slate-400':rate>=80?'text-emerald-600':'text-amber-600'}`}>{rate==null?'—':rate+'%'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3">
         <div>
@@ -257,7 +257,7 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
  const [f,setF]=useState<any>({kind:'PG',name:'',code:'',baseUrl:'',isMock:false,services:{payin:true,payout:true,refund:true},authType:'BEARER',apiKeyHeader:'x-api-key',amountUnit:'paise',payinPath:'/payins',payoutPath:'/payouts',payinStatusPath:'/payins/status',payoutStatusPath:'/payouts/status',refundPath:'/refunds',apiKey:'',apiSecret:'',keyLabel:'Primary'});
  const applyPreset=(preset:string)=>{ if(preset==='rupees') setF({...f,amountUnit:'rupees'}); else if(preset==='payout-only') setF({...f,services:{payin:false,payout:true,refund:false}}); else if(preset==='payin-only') setF({...f,services:{payin:true,payout:false,refund:true}}); else setF({...f,amountUnit:'paise',services:{payin:true,payout:true,refund:true}}); };
  const statFor=(stats:any,id:string)=>stats.data?.perProvider?.find((r:any)=>r.providerId===id);
- const combined=(id:string)=>{ const a=statFor(payinStats,id), b=statFor(payoutStats,id); if(!a&&!b) return null; const sc=(a?.successCount||0)+(b?.successCount||0), fl=(a?.failedCount||0)+(b?.failedCount||0); return {total:(a?.totalAmountPaise||0)+(b?.totalAmountPaise||0), today:(a?.todayAmountPaise||0)+(b?.todayAmountPaise||0), rate:(sc+fl)?Math.round(sc/(sc+fl)*100):100}; };
+ const combined=(id:string)=>{ const a=statFor(payinStats,id), b=statFor(payoutStats,id); if(!a&&!b) return null; const sc=(a?.successCount||0)+(b?.successCount||0), fl=(a?.failedCount||0)+(b?.failedCount||0); return {total:(a?.totalAmountPaise||0)+(b?.totalAmountPaise||0), today:(a?.todayAmountPaise||0)+(b?.todayAmountPaise||0), rate:(sc+fl)?Math.round(sc/(sc+fl)*100):null}; };
  const addProvider=async()=>{ const code=(f.code||f.name).toUpperCase().replace(/[^A-Z0-9]+/g,'').slice(0,20); if(!f.name) return setMsg('Enter a name for this API'); if(!f.isMock&&!f.baseUrl) return setMsg('Enter the Base URL (or tick Mock for a test API)'); try{ const prov=await api('/admin/providers',{method:'POST',body:{code,name:f.name,baseUrl:f.baseUrl,kind:f.kind,isMock:f.isMock,services:f.services,config:{authType:f.authType,apiKeyHeader:f.apiKeyHeader,amountUnit:f.amountUnit,payinPath:f.payinPath,payoutPath:f.payoutPath,payinStatusPath:f.payinStatusPath,payoutStatusPath:f.payoutStatusPath,refundPath:f.refundPath}}}); if(f.apiKey) await api(`/admin/providers/${prov.id}/keys`,{method:'POST',body:{label:f.keyLabel||'Primary',apiKey:f.apiKey,apiSecret:f.apiSecret||undefined}}); setMsg(`Done ✓ ${f.name} connected.`); setShowAdd(false); qc.invalidateQueries({queryKey:['aprov']}); qc.invalidateQueries({queryKey:['apiswitch']}); }catch(e:any){ setMsg(e.message); } };
  const testConn=async(id:string)=>{ setTestRes({...testRes,[id]:{note:'Testing…'}}); try{ const r=await api(`/admin/providers/${id}/test`,{method:'POST',body:{}}); setTestRes({...testRes,[id]:r}); }catch(e:any){ setTestRes({...testRes,[id]:{ok:false,note:e.message}}); } };
  const avatars=['#111','#f4a28c','#9ad4b5','#9ec5e8','#c9b8e8','#f0c96a'];
@@ -295,7 +295,7 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
           <div className="grid grid-cols-3 gap-2 mt-3">
             <div className="rounded-2xl bg-[#fdf0ea] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{st?inr(st.total).replace('₹',''):'0'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Total</p></div>
             <div className="rounded-2xl bg-[#eaf7f0] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{st?inr(st.today).replace('₹',''):'0'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Today</p></div>
-            <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${(st?.rate??100)>=80?'text-emerald-600':'text-amber-600'}`}>{st?.rate??'—'}%</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
+            <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${st?.rate==null?'text-slate-400':st.rate>=80?'text-emerald-600':'text-amber-600'}`}>{st?.rate==null?'—':st.rate+'%'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
           </div>
           <p className="text-[11.5px] text-slate-400 mt-2.5 truncate">{activeKey?<>Key <code className="font-mono text-slate-600">{activeKey.masked}</code></>:'No key attached'}</p>
           {tr&&<p className={`mt-2 text-[11.5px] rounded-xl px-2.5 py-1.5 ${tr.ok?'bg-emerald-50 text-emerald-800':'bg-rose-50 text-rose-700'}`}>{tr.ok?'Connected':'Failed'}{tr.ms?` · ${tr.ms}ms`:''}{tr.note?` · ${tr.note}`:''}</p>}
@@ -388,7 +388,7 @@ function SoftStatCards({kind,apiSel='',onApiSel}:{kind?:string;apiSel?:string;on
     return hit||{totalAmountPaise:0,totalCount:0,successCount:0,failedCount:0,pendingCount:0,todayAmountPaise:0,todayCount:0};
   };
   const src=pickSrc(raw);
-  const srOf=(s:any)=>{ const ok=s.successCount||0, fl=s.failedCount||0; return (ok+fl)?Math.round(ok/(ok+fl)*100):100; };
+  const srOf=(s:any)=>{ const ok=s.successCount||0, fl=s.failedCount||0; return (ok+fl)?Math.round(ok/(ok+fl)*100):null; };
   const title=kind==='PAYIN'?'Collection overview':kind==='PAYOUT'?'Payouts overview':'Transactions overview';
   const routeName=(p:any)=>p?(p.name||'').split(' (')[0]:'No route';
   const apiOptions=(()=>{
@@ -422,7 +422,7 @@ function SoftStatCards({kind,apiSel='',onApiSel}:{kind?:string;apiSel?:string;on
         <div className="kpi-mint"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{fmt(src.todayAmountPaise)}</p><span className="text-[11px] font-semibold text-emerald-700">↑ {src.todayCount||0} txns</span></div><p className="text-[12.5px] font-semibold mt-3">Today</p><p className="text-[11px] text-slate-500">{inr(src.todayAmountPaise||0)}</p></div>
         <div className="kpi-sky"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{src.totalCount||0}</p><span className="text-[11px] font-semibold text-slate-600">{src.pendingCount||0} pending</span></div><p className="text-[12.5px] font-semibold mt-3">Transactions</p><p className="text-[11px] text-slate-500">{src.totalCount||0} total</p></div>
         <div className="kpi-lilac"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{src.pendingCount||0}</p><span className={`text-[11px] font-semibold ${src.pendingCount?'text-rose-600':'text-emerald-700'}`}>{src.pendingCount?'↓ waiting':'↑ clear'}</span></div><p className="text-[12.5px] font-semibold mt-3">Pending</p><p className="text-[11px] text-slate-500">{src.failedCount||0} failed</p></div>
-        <div className="kpi-ink"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{sr}%</p><span className="text-[11px] font-semibold text-emerald-400">↑ {sr>=90?'healthy':sr>=70?'ok':'low'}</span></div><p className="text-[12.5px] font-semibold mt-3 text-white/80">Success rate</p><p className="text-[11px] text-white/45 truncate">{apiSel?apiSel.split(' (')[0]:routeName(kind==='PAYIN'?activeIn:activeOut)}</p></div>
+        <div className="kpi-ink"><div className="flex justify-between"><p className="text-[28px] font-bold tnum leading-none">{sr==null?'—':sr+'%'}</p><span className="text-[11px] font-semibold text-emerald-400">↑ {sr==null?'no txns':sr>=90?'healthy':sr>=70?'ok':'low'}</span></div><p className="text-[12.5px] font-semibold mt-3 text-white/80">Success rate</p><p className="text-[11px] text-white/45 truncate">{apiSel?apiSel.split(' (')[0]:routeName(kind==='PAYIN'?activeIn:activeOut)}</p></div>
       </div>
     </div>;
   }
@@ -466,12 +466,14 @@ const MethodChip=({name}:{name:string})=>{
     {n}
   </span>;
 };
-const signedAmt=(paise:number,kind:string)=>{
+const signedAmt=(paise:number,kind:string,status?:string)=>{
   const n=Number(paise)/100;
   const abs=n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(status==='FAILED') return {cls:'text-slate-400',txt:abs};
   if(kind==='PAYOUT'||kind==='REFUND') return {cls:'text-[#e5484d]',txt:`−${abs}`};
   return {cls:'text-[#1a9e5c]',txt:`+${abs}`};
 };
+const totalPaiseOf=(t:any)=>{ if(t.status==='FAILED') return Number(t.amountPaise)||0; const meta:any=t.metadata||{}; if(meta.totalAmountPaise!=null) return Number(meta.totalAmountPaise); return (Number(t.amountPaise)||0)+(Number(t.feePaise)||0); };
 
 /** Screenshot-style transactions desk. */
 export function AdminTxns({kind}:{kind?:string}={}){
@@ -603,10 +605,10 @@ export function AdminTxns({kind}:{kind?:string}={}){
             <tbody>
               {pageRows.map((t:any)=>{
                 const c=cust(t); const label=c.name||c.holderName||t.merchantRef||(t.kind==='PAYIN'?'Pay-in':'Payout');
-                const amt=signedAmt(t.amountPaise,t.kind);
+                const amt=signedAmt(t.amountPaise,t.kind,t.status);
                 const custLine=c.name||c.holderName||c.email||null;
                 const meta:any=t.metadata||{};
-                const totalPaise=meta.totalAmountPaise!=null?Number(meta.totalAmountPaise):(Number(t.amountPaise)||0)+(Number(t.feePaise)||0);
+                const totalPaise=totalPaiseOf(t);
                 const openBal=meta.openingBalancePaise!=null?Number(meta.openingBalancePaise):null;
                 const closeBal=meta.closingBalancePaise!=null?Number(meta.closingBalancePaise):null;
                 const mode=meta.mode||meta.method||'IMPS';
@@ -693,7 +695,7 @@ export function AdminTxns({kind}:{kind?:string}={}){
         </div>
         <div className="px-6 py-5 space-y-4">
           <div className="flex items-center justify-between">
-            <p className={`text-[28px] font-bold tnum ${signedAmt(sel.amountPaise,sel.kind).cls}`}>{signedAmt(sel.amountPaise,sel.kind).txt} <span className="text-[13px] text-slate-400 font-semibold">INR</span></p>
+            <p className={`text-[28px] font-bold tnum ${signedAmt(sel.amountPaise,sel.kind,sel.status).cls}`}>{signedAmt(sel.amountPaise,sel.kind,sel.status).txt} <span className="text-[13px] text-slate-400 font-semibold">INR</span></p>
             <AttachBadge s={sel.status}/>
           </div>
           <div className="rounded-2xl bg-[#f6f7f9] p-4 space-y-2.5 text-[13px]">
@@ -706,7 +708,7 @@ export function AdminTxns({kind}:{kind?:string}={}){
               ['Mobile',sel.customer?.phone||sel.customer?.mobile||'—'],
               ['UTR Number',sel.utr||'—'],
               ['Amount',inr(sel.amountPaise)],
-              ['Total Amount',inr((sel.metadata?.totalAmountPaise!=null?Number(sel.metadata.totalAmountPaise):(Number(sel.amountPaise)||0)+(Number(sel.feePaise)||0)))],
+              ['Total Amount',inr(totalPaiseOf(sel))],
               ['Opening Balance',sel.metadata?.openingBalancePaise!=null?inr(Number(sel.metadata.openingBalancePaise)):'—'],
               ['Closing Balance',sel.metadata?.closingBalancePaise!=null?inr(Number(sel.metadata.closingBalancePaise)):'—'],
               ['Mode',sel.metadata?.mode||sel.metadata?.method||'IMPS'],
@@ -782,7 +784,7 @@ export function AdminApiReport({endpoint}:{endpoint?:string}={}){
   const total=Number(scope.totalAmountPaise||0);
   const label=kind==='PAYIN'?'Collection':'Payout';
   const selectedName=apiId?(allApisMap.get(apiId)?.providerName||'API').split(' (')[0]:'';
-  const sr=((scope.successCount||0)+(scope.failedCount||0))?Math.round((scope.successCount||0)/((scope.successCount||0)+(scope.failedCount||0))*100):100;
+  const sr=((scope.successCount||0)+(scope.failedCount||0))?Math.round((scope.successCount||0)/((scope.successCount||0)+(scope.failedCount||0))*100):null;
   const pts:any[]=trend.data?.points||[];
   const trendKey=kind==='PAYIN'?'payinPaise':'payoutPaise';
   const chartApis=rows.slice(0,8);
@@ -853,7 +855,7 @@ export function AdminApiReport({endpoint}:{endpoint?:string}={}){
           <div><p className="text-[18px] font-bold tnum text-slate-900">{data.successCount||0}</p><p className="text-[11.5px] text-slate-400">Successful</p></div>
           <div><p className="text-[18px] font-bold tnum text-slate-900">{data.failedCount||0}</p><p className="text-[11.5px] text-slate-400">Failed</p></div>
           <div><p className="text-[18px] font-bold tnum text-slate-900">{rows.length}</p><p className="text-[11.5px] text-slate-400">APIs</p></div>
-          <div><p className="text-[18px] font-bold tnum text-emerald-600">+{sr}%</p><p className="text-[11.5px] text-slate-400">Success rate</p></div>
+          <div><p className="text-[18px] font-bold tnum text-emerald-600">{sr==null?'—':`+${sr}%`}</p><p className="text-[11.5px] text-slate-400">Success rate</p></div>
         </div>
       </div>
 
@@ -883,7 +885,7 @@ export function AdminApiReport({endpoint}:{endpoint?:string}={}){
           <div><b className="tnum text-slate-900">{(data.successCount||0).toLocaleString('en-IN')}</b><span className="text-slate-400"> Success</span><span className="text-emerald-600 font-semibold ml-1">+{okShare}%</span></div>
           <div><b className="tnum text-slate-900">{(data.failedCount||0).toLocaleString('en-IN')}</b><span className="text-slate-400"> Failed</span><span className="text-rose-500 font-semibold ml-1">−{failShare}%</span></div>
           <div><b className="tnum text-slate-900">{(data.pendingCount||0).toLocaleString('en-IN')}</b><span className="text-slate-400"> Pending</span></div>
-          <div><b className="tnum text-emerald-600">+{sr}%</b><span className="text-slate-400"> Net SR</span></div>
+          <div><b className="tnum text-emerald-600">{sr==null?'—':`+${sr}%`}</b><span className="text-slate-400"> Net SR</span></div>
         </div>
       </div>
     </div>

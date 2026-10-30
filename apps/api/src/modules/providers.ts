@@ -20,7 +20,7 @@ export class MockProviderAdapter implements ProviderAdapter {
   async getPayoutStatus(providerRef:string){ await this.latency(); return {status:'SUCCESS' as const,providerRef}; }
   async createRefund(req:any){ await this.latency(); return {status:'SUCCESS' as const,providerRef:'mockrf_'+req.merchantRef}; }
   async getRefundStatus(providerRef:string){ return {status:'SUCCESS' as const,providerRef}; }
-  verifyWebhook(){ return true; } // mock: still requires event id dedupe upstream
+  verifyWebhook(_raw: string, headers: Record<string,string>){ const expected=process.env.MOCK_WEBHOOK_SECRET||''; const got=String(headers?.['x-syntrix-webhook-secret']||''); return !!expected && got===expected; }
   normalizeWebhook(p:any){ return {providerEventId:p.eventId||p.id, providerRef:p.providerRef, status:p.status, amountPaise:p.amountPaise}; }
 }
 /** Generic HTTP adapter skeleton for real providers: only approved HTTPS hosts, no redirects to private hosts, hard timeout. Map provider fields inside each concrete subclass. */

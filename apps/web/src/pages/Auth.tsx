@@ -5,7 +5,7 @@ const msInput="w-full bg-transparent border-0 border-b border-[#8a8886] focus:bo
 const msBtn="bg-[#0067c0] hover:bg-[#005da6] active:bg-[#005494] text-white text-[15px] font-semibold px-8 py-[7px] min-w-[118px] transition-colors disabled:opacity-60";
 const msLink="text-[#0067c0] hover:underline cursor-pointer";
 
-export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<'email'|'password'|'pin'>('email'); const [f,setF]=useState({email:'Harshit0728@gmail.com',password:'',totp:'',pin:''}); const [err,setErr]=useState(''); const [mfa,setMfa]=useState(false); const [busy,setBusy]=useState(false); const [show,setShow]=useState(false); const pinRefs=useRef<(HTMLInputElement|null)[]>([]);
+export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<'email'|'password'|'pin'>('email'); const [f,setF]=useState({email:'',password:'',totp:'',pin:''}); const [err,setErr]=useState(''); const [mfa,setMfa]=useState(false); const [busy,setBusy]=useState(false); const [show,setShow]=useState(false); const pinRefs=useRef<(HTMLInputElement|null)[]>([]);
  const next=(e?:any)=>{ e?.preventDefault(); if(!f.email.includes('@')) return setErr('Enter a valid email address.'); setErr(''); setStep('password'); };
  /** Ek hi portal: pehle wala panel (ab admin). Login ke baad hamesha /app */
  const submit=async(e:any,body?:any)=>{ e?.preventDefault(); setErr(''); setBusy(true); try{ const r=await api('/auth/login',{method:'POST',body:body||f}); if(r.pinRequired){ setStep('pin'); setBusy(false); return; } if(r.mfaRequired){ setMfa(true); setStep('password'); setBusy(false); return; } nav('/app'); }catch(e:any){ setErr(e.message); setBusy(false); } };
@@ -30,7 +30,7 @@ export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<
   <form onSubmit={submit} className="mt-5 space-y-5">
    <div><input type={show?'text':'password'} autoFocus autoComplete="current-password" className={msInput} value={f.password} onChange={e=>setF({...f,password:e.target.value})} placeholder="Password"/><label className="flex items-center gap-2 mt-3 text-[13px] text-[#1b1b1b] cursor-pointer select-none"><input type="checkbox" checked={show} onChange={e=>setShow(e.target.checked)} className="w-4 h-4 accent-[#0067c0]"/>Show password</label></div>
    {mfa&&<div><input className={msInput+" tracking-[.3em] font-mono"} inputMode="numeric" maxLength={6} value={f.totp} onChange={e=>setF({...f,totp:e.target.value})} placeholder="Authenticator code (MFA)"/></div>}
-   <p className="text-[13px]"><span className={msLink} onClick={()=>setErr('Demo environment: use password Demo@12345, or ask your admin to reset it from Settings.')}>Forgot password?</span></p>
+   <p className="text-[13px]"><span className={msLink} onClick={()=>setErr('Password reset by email is not set up. Change it from Settings after you sign in, or ask the platform admin.')}>Forgot password?</span></p>
    <div className="flex justify-end pt-1"><button className={msBtn} disabled={busy}>{busy?'Signing in…':'Sign in'}</button></div>
   </form></AuthShell>; }
 
