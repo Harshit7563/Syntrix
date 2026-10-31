@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
+import QRCode from 'qrcode';
 import {api} from '../api';
 import {Alert} from './Auth';
 
@@ -16,6 +17,7 @@ export function Settings(){
   const onb=useQuery({queryKey:['set-onb'],queryFn:()=>api('/merchant/onboarding'),retry:false,enabled:!!me.data&&!STAFF.has(me.data.role)});
   const [msg,setMsg]=useState('');
   const [mfaSecret,setMfaSecret]=useState('');
+  const [mfaQr,setMfaQr]=useState('');
   const [code,setCode]=useState('');
 
   const u:any=me.data||{};
@@ -26,8 +28,8 @@ export function Settings(){
 
   const editPhone=async()=>{ const phone=prompt('Phone number (+91 …)',u.phone||''); if(!phone) return; try{ await api('/auth/profile',{method:'POST',body:{phone}}); setMsg('Phone updated ✓'); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
   const editPassword=async()=>{ const currentPassword=prompt('Current password'); if(!currentPassword) return; const newPassword=prompt('New password (10+ characters)'); if(!newPassword) return; try{ const r=await api('/auth/change-password',{method:'POST',body:{currentPassword,newPassword}}); setMsg(r.message); setTimeout(()=>location.href='/login',1500); }catch(e:any){ setMsg(e.message); } };
-  const setupMfa=async()=>{ if(u.mfaEnabled){ setMsg('Authenticator is already on'); return; } const r=await api('/auth/mfa/setup',{method:'POST',body:{}}); setMfaSecret(r.secret); setMsg('Add this key in Google Authenticator or Microsoft Authenticator, then enter the 6-digit code'); };
-  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('Authenticator is on. Next sign-in will ask for the code.'); setMfaSecret(''); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
+  const setupMfa=async()=>{ if(u.mfaEnabled){ setMsg('Authenticator is already on'); return; } const r=await api('/auth/mfa/setup',{method:'POST',body:{}}); setMfaSecret(r.secret); setMfaQr(await QRCode.toDataURL(r.otpauth,{width:280,margin:1,errorCorrectionLevel:'M',color:{dark:'#111111',light:'#ffffff'}})); setMsg('Scan the QR with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code'); };
+  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('Authenticator is on. Next sign-in will ask for the code.'); setMfaSecret(''); setMfaQr(''); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
   if(me.isLoading) return <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{[1,2,3].map(i=><div key={i} className="h-28 rounded-[22px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   return <div className="w-full">
@@ -98,10 +100,14 @@ export function Settings(){
           </div>
           {!u.mfaEnabled&&<button onClick={setupMfa} className="mt-3 h-9 px-3.5 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black">Set up authenticator</button>}
           {mfaSecret&&(
-            <div className="mt-3 flex flex-wrap gap-2 items-center">
-              <code className="bg-white rounded-xl border border-slate-200 px-3 py-2 text-[12px] font-mono">{mfaSecret}</code>
-              <input className="input !w-[120px] !py-2 !rounded-xl" placeholder="6-digit" value={code} onChange={e=>setCode(e.target.value)}/>
-              <button className="btn !py-2 !rounded-xl" onClick={verifyMfa}>Verify</button>
+            <div className="mt-4">
+              {mfaQr&&<img src={mfaQr} alt="Authenticator QR code" width={180} height={180} className="bg-white rounded-2xl border border-slate-200 p-2"/>}
+              <p className="text-[12.5px] text-slate-500 mt-2">Scan this QR. If the camera cannot read it, enter the key below.</p>
+              <code className="mt-2 inline-block bg-white rounded-xl border border-slate-200 px-3 py-2 text-[12px] font-mono">{mfaSecret}</code>
+              <div className="mt-3 flex flex-wrap gap-2 items-center">
+                <input className="input !w-[140px] !py-2 !rounded-xl" inputMode="numeric" maxLength={6} placeholder="6-digit code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))}/>
+                <button className="btn !py-2 !rounded-xl" onClick={verifyMfa}>Verify</button>
+              </div>
             </div>
           )}
         </div>
