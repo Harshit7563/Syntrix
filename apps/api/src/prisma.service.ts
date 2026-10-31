@@ -3,7 +3,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common'; impo
   async onModuleInit(){
     if(!process.env.DATABASE_URL) return;
     for(let i=0;i<10;i++){
-      try{ await this.$connect(); await this.retireSeededDemoPasswords(); await this.ensureOrvian(); return; }
+      try{ await this.$connect(); await this.retireSeededDemoPasswords(); if((process.env.PAYMENTS_PROVIDER||'BAWJI').toUpperCase()==='ORVIAN') await this.ensureOrvian(); else await this.ensureBawji(); return; }
       catch(e){ console.warn(`DB connect attempt ${i+1}/10 failed`, (e as Error).message); await new Promise(r=>setTimeout(r,1500)); }
     }
     console.error('DB still unreachable after retries — API will keep trying on requests');
@@ -37,6 +37,22 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common'; impo
       else await this.routingRule.create({data:{productCode,providerId:prov.id,priority:1,isActive:true}});
     }
     console.log('ORVIAN is the pay-in and payout provider. MockPay is off.');
+  }
+  /** Test provider. Pay-in opens a QR page on this site. Payout never calls a bank. ORVIAN stays off. */
+  private async ensureBawji(){
+    const baseUrl=(process.env.PUBLIC_APP_URL||'https://syntrixapi.in').replace(/\/$/,'');
+    const prov=await this.provider.upsert({where:{code:'BAWJI'},create:{code:'BAWJI',name:'Bawji Raj',baseUrl,kind:'PG',isMock:false,isActive:true,timeoutMs:15000},update:{name:'Bawji Raj',baseUrl,isMock:false,isActive:true}});
+    for(const cap of [{operation:'createPayin',productCode:'PAYIN'},{operation:'createPayout',productCode:'PAYOUT'}]){
+      await this.providerCapability.upsert({where:{providerId_operation_productCode:{providerId:prov.id,operation:cap.operation,productCode:cap.productCode}},create:{providerId:prov.id,...cap},update:{}});
+    }
+    await this.provider.updateMany({where:{code:{in:['ORVIAN','MOCKPAY']}},data:{isActive:false}});
+    await this.routingRule.updateMany({where:{merchantId:null,productCode:{in:['PAYIN','PAYOUT']},NOT:{providerId:prov.id}},data:{isActive:false}});
+    for(const productCode of ['PAYIN','PAYOUT']){
+      const rule=await this.routingRule.findFirst({where:{providerId:prov.id,productCode,merchantId:null}});
+      if(rule) await this.routingRule.update({where:{id:rule.id},data:{isActive:true,priority:1}});
+      else await this.routingRule.create({data:{productCode,providerId:prov.id,priority:1,isActive:true}});
+    }
+    console.log('Bawji Raj is the pay-in and payout provider. ORVIAN is off. No bank money moves.');
   }
   async onModuleDestroy(){ await this.$disconnect(); }
 }

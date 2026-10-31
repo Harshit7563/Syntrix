@@ -1,4 +1,4 @@
-import {useState} from 'react';import * as XLSX from 'xlsx';import jsPDF from 'jspdf';import autoTable from 'jspdf-autotable';import {useQuery,useQueryClient} from '@tanstack/react-query';import {api,inr,Status} from '../api';import {Alert} from './Auth';
+import {useEffect,useState} from 'react';import QRCode from 'qrcode';import * as XLSX from 'xlsx';import jsPDF from 'jspdf';import autoTable from 'jspdf-autotable';import {useQuery,useQueryClient} from '@tanstack/react-query';import {api,inr,Status} from '../api';import {Alert} from './Auth';
 const useQ=(k:string,url:string)=>useQuery({queryKey:[k],queryFn:()=>api(url),retry:false});
 const StatusPill=({s}:{s:string})=>{ const map:any={SUCCESS:['Captured','bg-emerald-50 text-emerald-600','bg-emerald-500'],FAILED:['Failed','bg-red-50 text-red-500','bg-red-500'],PENDING:['Created','bg-slate-100 text-slate-500','bg-slate-400'],PROCESSING:['Processing','bg-amber-50 text-amber-600','bg-amber-500'],UNKNOWN:['Unknown','bg-purple-50 text-purple-600','bg-purple-500'],REFUNDED:['Refunded','bg-indigo-50 text-indigo-600','bg-indigo-500'],PARTIALLY_REFUNDED:['Partial refund','bg-indigo-50 text-indigo-600','bg-indigo-400']}; const [label,cls,dot]=map[s]||[s,'bg-slate-100 text-slate-500','bg-slate-400']; return <span className={`inline-flex items-center gap-1.5 rounded-full pl-2 pr-2.5 py-[3px] text-[11.5px] font-semibold ${cls}`}><span className={`w-1.5 h-1.5 rounded-full ${dot}`}/>{label}</span>; };
 /** Height-based bar chart — avoids overlapping capsule stacks. */
@@ -1034,7 +1034,18 @@ export function AdminTestApi(){
   const [busy,setBusy]=useState(false);
   const [out,setOut]=useState<any>(null);
   const [copied,setCopied]=useState(false);
+  const [qr,setQr]=useState('');
   const [sel,setSel]=useState<any>(null);
+  const payLink=out?.response?.upiLink||out?.response?.paymentLink||'';
+  useEffect(()=>{ if(!payLink){ setQr(''); return; } let stop=false; QRCode.toDataURL(payLink,{width:220,margin:1}).then(u=>{ if(!stop) setQr(u); }).catch(()=>setQr('')); return ()=>{ stop=true; }; },[payLink]);
+  useEffect(()=>{
+    const ref=out?.response?.merchantRef; const status=out?.response?.status;
+    if(!ref||!String(payLink).includes('/pay/bawji/')||status==='SUCCESS'||status==='FAILED') return;
+    let stop=false;
+    const tick=async()=>{ try{ const s=await api('/pay/bawji/'+encodeURIComponent(ref)); if(stop) return; setOut((prev:any)=>prev?.response?{...prev,status:s.status,ok:s.status!=='FAILED',response:{...prev.response,status:s.status,utr:s.utr||prev.response.utr}}:prev); }catch{} };
+    const id=setInterval(tick,2000);
+    return ()=>{ stop=true; clearInterval(id); };
+  },[out?.response?.merchantRef,out?.response?.status,payLink]);
   const copyResponse=async()=>{
     if(!out) return;
     const text=JSON.stringify(out,null,2);
@@ -1042,7 +1053,8 @@ export function AdminTestApi(){
     catch{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
     setCopied(true); setTimeout(()=>setCopied(false),1500);
   };
-  const run=async()=>{ const pid=tc.providerId||providers?.[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
+  const activeProviders=(providers||[]).filter((p:any)=>p.isActive!==false);
+  const run=async()=>{ const pid=tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
   const counts=hist.data?.counts||{ALL:0,SUCCESS:0,PENDING:0,FAILED:0};
   const items:any[]=hist.data?.items||[];
   const bucketCls:any={SUCCESS:'bg-emerald-50 text-emerald-700',PENDING:'bg-amber-50 text-amber-700',FAILED:'bg-rose-50 text-rose-700'};
@@ -1059,9 +1071,9 @@ export function AdminTestApi(){
       <div className="grid md:grid-cols-3 gap-3">
         <div>
           <label className="label">API</label>
-          <select className="input !rounded-xl" value={tc.providerId||providers?.[0]?.id||''} onChange={e=>setTc({...tc,providerId:e.target.value})}>
+          <select className="input !rounded-xl" value={tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id||''} onChange={e=>setTc({...tc,providerId:e.target.value})}>
             <option value="">Select API…</option>
-            {(providers||[]).map((p:any)=><option key={p.id} value={p.id}>{p.name.split(' (')[0]} ({p.code})</option>)}
+            {activeProviders.map((p:any)=><option key={p.id} value={p.id}>{p.name.split(' (')[0]} ({p.code})</option>)}
           </select>
         </div>
         <div>
@@ -1112,7 +1124,8 @@ export function AdminTestApi(){
           <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Amount</p><p className="font-bold tnum text-[13px] mt-0.5">{out.response.amountPaise!=null?inr(out.response.amountPaise):'—'}</p></div>
           <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[10px] font-bold uppercase text-emerald-700/70">UTR</p><p className="font-mono font-bold text-[13px] text-emerald-800 mt-0.5 break-all">{out.response.utr||'—'}</p></div>
           <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Provider ref</p><p className="font-mono text-[12px] text-slate-700 mt-0.5 break-all">{out.response.providerRef||'—'}</p></div>
-          {(out.response.upiLink||out.response.paymentLink)&&<div className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[10px] font-bold uppercase text-sky-700/70">UPI link</p><p className="font-mono text-[12px] text-sky-900 mt-0.5 break-all">{out.response.upiLink||out.response.paymentLink}</p></div>}
+          {(out.response.upiLink||out.response.paymentLink)&&<div className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[10px] font-bold uppercase text-sky-700/70">Payment page</p>{qr&&<img src={qr} alt="Test QR" className="mt-2 w-[180px] h-[180px] rounded-xl bg-white"/>}<a className="block font-mono text-[12px] text-sky-900 mt-2 break-all underline" href={out.response.upiLink||out.response.paymentLink} target="_blank" rel="noreferrer">{out.response.upiLink||out.response.paymentLink}</a><p className="text-[12px] text-sky-800 mt-1">QR is a test page. Scanning it does not send money. Open it and press Mark as paid.</p></div>}
+          {String(out.response.utr||'').startsWith('BAWJI')&&<div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[13px] text-amber-900">Simulated. No money was sent to a bank.</p></div>}
           {out.response.failureReason&&<div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[10px] font-bold uppercase text-rose-700/70">Reason</p><p className="text-[13px] text-rose-800 mt-0.5">{out.response.failureReason}</p></div>}
         </div>
       )}

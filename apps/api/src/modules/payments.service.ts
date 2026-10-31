@@ -1,11 +1,41 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { feePaise, nextStatus, sha256, stableStringify, pickRouteByAmount, circuitThreshold, circuitCooldownMs, isCircuitOpen } from '../common/core';
 import { adapterFor, hasCapability, ProviderTimeoutError, activeProviderCreds } from './providers';
 import { LedgerService, acct } from './ledger.service';
+import { TxnEventsService } from './txn-events.service';
 
 @Injectable() export class PaymentsService {
-  constructor(private p: PrismaService, private ledger: LedgerService) {}
+  constructor(private p: PrismaService, private ledger: LedgerService, private live: TxnEventsService) {}
+
+  /** Push txn snapshot to mobile / live SSE subscribers. */
+  async publishLive(t: any) {
+    if (!t?.id) return;
+    try {
+      const prov = t.providerId
+        ? await this.p.provider.findUnique({ where: { id: t.providerId }, select: { code: true, name: true } })
+        : null;
+      this.live.publish({
+        type: 'txn',
+        id: t.id,
+        merchantId: t.merchantId || null,
+        kind: t.kind,
+        status: t.status,
+        amountPaise: Number(t.amountPaise || 0),
+        feePaise: Number(t.feePaise || 0),
+        currency: t.currency || 'INR',
+        orderId: t.merchantRef || null,
+        utr: t.utr || null,
+        providerCode: prov?.code || null,
+        providerName: prov?.name || null,
+        message: t.failureReason || null,
+        createdAt: new Date(t.createdAt || Date.now()).toISOString(),
+        updatedAt: new Date(t.updatedAt || Date.now()).toISOString(),
+      });
+    } catch {
+      /* never break payment path for live feed */
+    }
+  }
 
   /** NEW traffic only: skip providers whose circuit is open. In-flight txns keep their providerId. */
   private async openCircuitIds() {
@@ -235,6 +265,7 @@ import { LedgerService, acct } from './ledger.service';
     if (txn.status === 'SUCCESS') await this.noteProviderOutcome(provider.id, true);
     else if (hardError) await this.noteProviderOutcome(provider.id, false, result.message || 'payin_hard_error');
     // issuer FAILED / soft decline does NOT open circuit
+    await this.publishLive(txn);
     const view = this.view(txn);
     try {
       await this.p.idempotencyRecord.create({
@@ -455,6 +486,7 @@ import { LedgerService, acct } from './ledger.service';
     if (txn.status === 'SUCCESS') await this.noteProviderOutcome(provider.id, true);
     // Only hard errors (timeout / thrown transport) trip circuit — soft issuer FAILED from adapter does not
     else if (hardError) await this.noteProviderOutcome(provider.id, false, result.message || 'payout_hard_error');
+    await this.publishLive(txn);
     const view = this.view(txn);
     try {
       await this.p.idempotencyRecord.create({
@@ -591,8 +623,58 @@ import { LedgerService, acct } from './ledger.service';
         }
       });
       if (ns === 'SUCCESS' && t.providerId) await this.noteProviderOutcome(t.providerId, true);
+      await this.publishLive({ ...t, status: ns, updatedAt: new Date() });
     }
     return { ...t, status: ns };
+  }
+
+  private async bawjiTxn(ref: string) {
+    const merchantRef = String(ref || '').trim();
+    if (!merchantRef) throw new BadRequestException('Payment reference is required');
+    const t = await this.p.transaction.findFirst({ where: { merchantRef, kind: 'PAYIN' }, orderBy: { createdAt: 'desc' } });
+    if (!t) throw new NotFoundException('Payment not found');
+    const prov = t.providerId ? await this.p.provider.findUnique({ where: { id: t.providerId } }) : null;
+    if (prov?.code !== 'BAWJI') throw new NotFoundException('Payment not found');
+    return t;
+  }
+  async bawjiPayView(ref: string) {
+    const t = await this.bawjiTxn(ref);
+    const base = (process.env.PUBLIC_APP_URL || 'https://syntrixapi.in').replace(/\/$/, '');
+    return {
+      merchantRef: t.merchantRef,
+      amountPaise: Number(t.amountPaise),
+      status: t.status,
+      utr: t.utr || null,
+      payUrl: `${base}/pay/bawji/${encodeURIComponent(t.merchantRef)}`,
+      simulated: true,
+    };
+  }
+  /** Marks a Bawji Raj test pay-in paid and credits the ledger. No bank and no ORVIAN call. */
+  async confirmBawjiPay(ref: string) {
+    const t = await this.bawjiTxn(ref);
+    if (t.status === 'SUCCESS') return this.bawjiPayView(ref);
+    if (t.status !== 'PROCESSING' && t.status !== 'PENDING') throw new BadRequestException('This test payment can no longer be marked paid');
+    const { bawjiUtr } = await import('./bawji');
+    const utr = bawjiUtr(t.id, 'BAWJI');
+    await this.p.$transaction(async tx => {
+      const prod = await tx.apiProduct.findUnique({ where: { code: 'PAYIN' } });
+      const price = prod ? await tx.pricingPlan.findUnique({ where: { merchantId_productId: { merchantId: t.merchantId, productId: prod.id } } }) : null;
+      const fee = feePaise(Number(t.amountPaise), price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+      const updated = await tx.transaction.updateMany({
+        where: { id: t.id, status: { in: ['PROCESSING', 'PENDING'] } },
+        data: { status: 'SUCCESS', utr, feePaise: BigInt(fee), providerRef: t.providerRef || t.merchantRef },
+      });
+      if (!updated.count) return;
+      const amount = Number(t.amountPaise);
+      await this.ledger.post(tx, `payin:${t.id}`, 'Payin collection', [
+        { account: 'platform:clearing', merchantId: null, kind: 'PLATFORM', debit: amount, credit: 0 },
+        { account: acct(t.merchantId, 'COLLECTIONS'), merchantId: t.merchantId, kind: 'COLLECTIONS', debit: 0, credit: amount - fee },
+        { account: 'platform:fees', merchantId: null, kind: 'PLATFORM', debit: 0, credit: fee },
+      ]);
+    });
+    const done = await this.p.transaction.findUnique({ where: { id: t.id } });
+    if (done?.status === 'SUCCESS') await this.publishLive(done);
+    return this.bawjiPayView(ref);
   }
 
   view(t: any) {
