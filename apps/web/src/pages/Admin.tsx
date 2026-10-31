@@ -1033,12 +1033,20 @@ export function AdminTestApi(){
   const [tc,setTc]=useState<any>({providerId:'',kind:'PAYIN',amountRupees:'100',customerName:'Test Customer',email:'test@gmail.com',mobile:'9876543210',account:'1234567890',ifsc:'HDFC0000001',name:'Test Beneficiary'});
   const [busy,setBusy]=useState(false);
   const [out,setOut]=useState<any>(null);
+  const [copied,setCopied]=useState(false);
   const [sel,setSel]=useState<any>(null);
+  const copyResponse=async()=>{
+    if(!out) return;
+    const text=JSON.stringify(out,null,2);
+    try{ await navigator.clipboard.writeText(text); }
+    catch{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    setCopied(true); setTimeout(()=>setCopied(false),1500);
+  };
   const run=async()=>{ const pid=tc.providerId||providers?.[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
   const counts=hist.data?.counts||{ALL:0,SUCCESS:0,PENDING:0,FAILED:0};
   const items:any[]=hist.data?.items||[];
   const bucketCls:any={SUCCESS:'bg-emerald-50 text-emerald-700',PENDING:'bg-amber-50 text-amber-700',FAILED:'bg-rose-50 text-rose-700'};
-  return <div className="space-y-6 w-full max-w-6xl">
+  return <div className="space-y-6 w-full">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-[22px] font-bold text-slate-900 tracking-tight">Test API</h1>
@@ -1046,9 +1054,9 @@ export function AdminTestApi(){
       </div>
     </div>
 
-    <div className="grid lg:grid-cols-[1fr_1fr] gap-4">
-      <section className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5 space-y-4">
-        <h2 className="text-[15px] font-bold text-slate-900">Console</h2>
+    <section className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5 space-y-4">
+      <h2 className="text-[15px] font-bold text-slate-900">Request</h2>
+      <div className="grid md:grid-cols-3 gap-3">
         <div>
           <label className="label">API</label>
           <select className="input !rounded-xl" value={tc.providerId||providers?.[0]?.id||''} onChange={e=>setTc({...tc,providerId:e.target.value})}>
@@ -1068,53 +1076,51 @@ export function AdminTestApi(){
           <label className="label">Amount (₹)</label>
           <input className="input !rounded-xl tnum" type="number" min={1} step="0.01" value={tc.amountRupees} onChange={e=>setTc({...tc,amountRupees:e.target.value})}/>
         </div>
-        {tc.kind==='PAYIN'&&(
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div><label className="label">Customer name</label><input className="input !rounded-xl" value={tc.customerName} onChange={e=>setTc({...tc,customerName:e.target.value})}/></div>
-            <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
-            <div className="sm:col-span-2"><label className="label">Email</label><input className="input !rounded-xl" value={tc.email} onChange={e=>setTc({...tc,email:e.target.value})}/></div>
-          </div>
-        )}
-        {tc.kind==='PAYOUT'&&(
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div><label className="label">Account number</label><input className="input !rounded-xl font-mono" value={tc.account} onChange={e=>setTc({...tc,account:e.target.value})}/></div>
-            <div><label className="label">IFSC</label><input className="input !rounded-xl font-mono uppercase" value={tc.ifsc} onChange={e=>setTc({...tc,ifsc:e.target.value.toUpperCase()})}/></div>
-            <div><label className="label">Beneficiary name</label><input className="input !rounded-xl" value={tc.name} onChange={e=>setTc({...tc,name:e.target.value})}/></div>
-            <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
-          </div>
-        )}
-        <button type="button" disabled={busy} className="btn !px-6 !rounded-xl disabled:opacity-60" onClick={run}>{busy?'Running…':'Submit test'}</button>
-      </section>
+      </div>
+      {tc.kind==='PAYIN'&&(
+        <div className="grid md:grid-cols-3 gap-3">
+          <div><label className="label">Customer name</label><input className="input !rounded-xl" value={tc.customerName} onChange={e=>setTc({...tc,customerName:e.target.value})}/></div>
+          <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
+          <div><label className="label">Email</label><input className="input !rounded-xl" value={tc.email} onChange={e=>setTc({...tc,email:e.target.value})}/></div>
+        </div>
+      )}
+      {tc.kind==='PAYOUT'&&(
+        <div className="grid md:grid-cols-4 gap-3">
+          <div><label className="label">Account number</label><input className="input !rounded-xl font-mono" value={tc.account} onChange={e=>setTc({...tc,account:e.target.value})}/></div>
+          <div><label className="label">IFSC</label><input className="input !rounded-xl font-mono uppercase" value={tc.ifsc} onChange={e=>setTc({...tc,ifsc:e.target.value.toUpperCase()})}/></div>
+          <div><label className="label">Beneficiary name</label><input className="input !rounded-xl" value={tc.name} onChange={e=>setTc({...tc,name:e.target.value})}/></div>
+          <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
+        </div>
+      )}
+      <button type="button" disabled={busy} className="btn !px-6 !rounded-xl disabled:opacity-60" onClick={run}>{busy?'Running…':'Submit test'}</button>
+    </section>
 
-      <section className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5 flex flex-col min-h-[320px]">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-bold text-slate-900">Response</h2>
-          <div className="flex items-center gap-2">
-            {out?.ms!=null&&<span className="text-[11px] text-slate-400">{out.ms}ms</span>}
-            {out?.ok===true&&<span className="text-[11px] font-bold text-emerald-600">OK</span>}
-            {out?.ok===false&&<span className="text-[11px] font-bold text-rose-600">FAILED</span>}
-            {out&&<button type="button" className="text-[12px] font-semibold text-slate-500 hover:underline" onClick={()=>setOut(null)}>Clear</button>}
-          </div>
+    <section className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 className="text-[15px] font-bold text-slate-900">Console</h2>
+        <div className="flex items-center gap-2">
+          {out?.ms!=null&&<span className="text-[11px] text-slate-400">{out.ms}ms</span>}
+          {out?.ok===true&&<span className="text-[11px] font-bold text-emerald-600">OK</span>}
+          {out?.ok===false&&<span className="text-[11px] font-bold text-rose-600">FAILED</span>}
+          <button type="button" disabled={!out} onClick={copyResponse} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-[12px] font-semibold disabled:opacity-40">{copied?'Copied':'Copy'}</button>
+          {out&&<button type="button" className="h-8 px-3 rounded-lg border border-slate-200 text-[12px] font-semibold text-slate-600" onClick={()=>setOut(null)}>Clear</button>}
         </div>
-        {out?.response&&(
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Status</p><p className="font-bold text-[13px] mt-0.5">{out.response.status||out.status||'—'}</p></div>
-            <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Amount</p><p className="font-bold tnum text-[13px] mt-0.5">{out.response.amountPaise!=null?inr(out.response.amountPaise):'—'}</p></div>
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2 col-span-2">
-              <p className="text-[10px] font-bold uppercase text-emerald-700/70">UTR / Bank RRN</p>
-              <p className="font-mono font-bold text-[14px] text-emerald-800 mt-0.5 break-all">{out.response.utr||'— not returned'}</p>
-            </div>
-            <div className="rounded-xl bg-[#f7f8fa] px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-slate-400">Provider ref</p><p className="font-mono text-[12px] text-slate-700 mt-0.5 break-all">{out.response.providerRef||'—'}</p></div>
-            {(out.response.upiLink||out.response.paymentLink)&&<div className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-sky-700/70">UPI link</p><p className="font-mono text-[12px] text-sky-900 mt-0.5 break-all">{out.response.upiLink||out.response.paymentLink}</p></div>}
-            {out.response.failureReason&&<div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-rose-700/70">Reason</p><p className="text-[13px] text-rose-800 mt-0.5">{out.response.failureReason}</p></div>}
-          </div>
-        )}
-        <div className="flex-1 rounded-2xl bg-[#0b1220] text-slate-100 p-4 overflow-auto min-h-[180px]">
-          {!out&&<p className="text-[12.5px] text-slate-500 font-mono">Ready — submit a test to see full details.</p>}
-          {out&&<pre className="text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">{JSON.stringify(out,null,2)}</pre>}
+      </div>
+      {out?.response&&(
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+          <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Status</p><p className="font-bold text-[13px] mt-0.5">{out.response.status||out.status||'—'}</p></div>
+          <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Amount</p><p className="font-bold tnum text-[13px] mt-0.5">{out.response.amountPaise!=null?inr(out.response.amountPaise):'—'}</p></div>
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[10px] font-bold uppercase text-emerald-700/70">UTR</p><p className="font-mono font-bold text-[13px] text-emerald-800 mt-0.5 break-all">{out.response.utr||'—'}</p></div>
+          <div className="rounded-xl bg-[#f7f8fa] px-3 py-2"><p className="text-[10px] font-bold uppercase text-slate-400">Provider ref</p><p className="font-mono text-[12px] text-slate-700 mt-0.5 break-all">{out.response.providerRef||'—'}</p></div>
+          {(out.response.upiLink||out.response.paymentLink)&&<div className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[10px] font-bold uppercase text-sky-700/70">UPI link</p><p className="font-mono text-[12px] text-sky-900 mt-0.5 break-all">{out.response.upiLink||out.response.paymentLink}</p></div>}
+          {out.response.failureReason&&<div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 sm:col-span-2 lg:col-span-4"><p className="text-[10px] font-bold uppercase text-rose-700/70">Reason</p><p className="text-[13px] text-rose-800 mt-0.5">{out.response.failureReason}</p></div>}
         </div>
-      </section>
-    </div>
+      )}
+      <div className="rounded-2xl bg-[#0b1220] text-slate-100 p-4 overflow-auto min-h-[420px] max-h-[70vh]">
+        {!out&&<p className="text-[12.5px] text-slate-500 font-mono">Ready — submit a test to see the full response here.</p>}
+        {out&&<pre className="text-[12.5px] leading-relaxed font-mono whitespace-pre-wrap break-all">{JSON.stringify(out,null,2)}</pre>}
+      </div>
+    </section>
 
     <section className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden">
       <div className="px-5 pt-4 pb-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
