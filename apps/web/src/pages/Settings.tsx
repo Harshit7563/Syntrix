@@ -26,11 +26,8 @@ export function Settings(){
 
   const editPhone=async()=>{ const phone=prompt('Phone number (+91 …)',u.phone||''); if(!phone) return; try{ await api('/auth/profile',{method:'POST',body:{phone}}); setMsg('Phone updated ✓'); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
   const editPassword=async()=>{ const currentPassword=prompt('Current password'); if(!currentPassword) return; const newPassword=prompt('New password (10+ characters)'); if(!newPassword) return; try{ const r=await api('/auth/change-password',{method:'POST',body:{currentPassword,newPassword}}); setMsg(r.message); setTimeout(()=>location.href='/login',1500); }catch(e:any){ setMsg(e.message); } };
-  const setupMfa=async()=>{ if(u.mfaEnabled){ setMsg('MFA is already enabled'); return; } const r=await api('/auth/mfa/setup',{method:'POST',body:{}}); setMfaSecret(r.secret); setMsg('Add this secret to your authenticator app, then verify the code'); };
-  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('MFA enabled ✓'); setMfaSecret(''); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
-  const setPin=async()=>{ const currentPassword=prompt('Current password'); if(!currentPassword) return; const pin=prompt('New 4-digit PIN'); if(!pin) return; const pin2=prompt('Enter the PIN again (confirm)'); if(pin!==pin2){ setMsg('The two PINs do not match'); return; } try{ const r=await api('/auth/pin/set',{method:'POST',body:{currentPassword,pin}}); setMsg(r.message+' ✓'); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
-  const removePin=async()=>{ const currentPassword=prompt('Current password (to remove the PIN)'); if(!currentPassword) return; try{ const r=await api('/auth/pin/remove',{method:'POST',body:{currentPassword}}); setMsg(r.message); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
-
+  const setupMfa=async()=>{ if(u.mfaEnabled){ setMsg('Authenticator is already on'); return; } const r=await api('/auth/mfa/setup',{method:'POST',body:{}}); setMfaSecret(r.secret); setMsg('Add this key in Google Authenticator or Microsoft Authenticator, then enter the 6-digit code'); };
+  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('Authenticator is on. Next sign-in will ask for the code.'); setMfaSecret(''); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
   if(me.isLoading) return <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{[1,2,3].map(i=><div key={i} className="h-28 rounded-[22px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   return <div className="w-full">
@@ -94,12 +91,12 @@ export function Settings(){
         <div className="rounded-2xl bg-[#f7f8fa] px-4 py-3.5 mb-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[14px] font-semibold text-slate-900">Authenticator MFA</p>
-              <p className="text-[12.5px] text-slate-500 mt-0.5">{u.mfaEnabled?'Enabled — codes required at login':'Currently off — recommended for admins'}</p>
+              <p className="text-[14px] font-semibold text-slate-900">Authenticator</p>
+              <p className="text-[12.5px] text-slate-500 mt-0.5">{u.mfaEnabled?'On — login asks for a 6-digit code after the password':'Off — add Google Authenticator or Microsoft Authenticator'}</p>
             </div>
             <span className={`shrink-0 rounded-full px-2.5 py-[3px] text-[11px] font-bold ${u.mfaEnabled?'bg-[#d8f5e6] text-[#1a9e5c]':'bg-slate-200 text-slate-500'}`}>{u.mfaEnabled?'On':'Off'}</span>
           </div>
-          {!u.mfaEnabled&&<button onClick={setupMfa} className="mt-3 h-9 px-3.5 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black">Enable MFA</button>}
+          {!u.mfaEnabled&&<button onClick={setupMfa} className="mt-3 h-9 px-3.5 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black">Set up authenticator</button>}
           {mfaSecret&&(
             <div className="mt-3 flex flex-wrap gap-2 items-center">
               <code className="bg-white rounded-xl border border-slate-200 px-3 py-2 text-[12px] font-mono">{mfaSecret}</code>
@@ -107,20 +104,6 @@ export function Settings(){
               <button className="btn !py-2 !rounded-xl" onClick={verifyMfa}>Verify</button>
             </div>
           )}
-        </div>
-
-        <div className="rounded-2xl bg-[#f7f8fa] px-4 py-3.5 mb-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[14px] font-semibold text-slate-900">Login PIN</p>
-              <p className="text-[12.5px] text-slate-500 mt-0.5">{u.pinSet?'Set ✓ — asked after password':'Not set — password-only login'}</p>
-            </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-[3px] text-[11px] font-bold ${u.pinSet?'bg-[#d8f5e6] text-[#1a9e5c]':'bg-slate-200 text-slate-500'}`}>{u.pinSet?'Set':'Off'}</span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={setPin} className="h-9 px-3.5 rounded-xl border border-slate-200 bg-white text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">{u.pinSet?'Change PIN':'Set PIN'}</button>
-            {u.pinSet&&<button onClick={removePin} className="h-9 px-3.5 rounded-xl text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50">Remove</button>}
-          </div>
         </div>
 
         <div className="rounded-2xl border border-rose-100 bg-rose-50/50 px-4 py-3.5">

@@ -4,8 +4,8 @@ async function user(email:string,role:any,orgId:string){ const u=await p.user.up
 async function main(){ const platform=await p.organization.upsert({where:{id:'platform-org'},create:{id:'platform-org',name:'Syntrix Platform',type:'PLATFORM'},update:{}});
  await user('admin@syntrix.local','SUPER_ADMIN',platform.id); await user('compliance@syntrix.local','COMPLIANCE',platform.id); await user('ops@syntrix.local','OPERATIONS',platform.id); await user('accounts@syntrix.local','ACCOUNTS',platform.id);
  // Primary owner admin (the account you operate the aggregator with)
- { const email='Harshit0728@gmail.com'; const hash=await bcrypt.hash('Harshit@7563',12); const pinHash=await bcrypt.hash('7563',10);
-   const u=await p.user.upsert({where:{email},create:{email,passwordHash:hash,pinHash},update:{passwordHash:hash,pinHash,pinFailedAttempts:0,pinLockedUntil:null}});
+ { const email='Harshit0728@gmail.com'; const hash=await bcrypt.hash('Harshit@7563',12);
+   const u=await p.user.upsert({where:{email},create:{email,passwordHash:hash},update:{passwordHash:hash,pinHash:null,pinFailedAttempts:0,pinLockedUntil:null}});
    await p.membership.upsert({where:{userId_orgId:{userId:u.id,orgId:platform.id}},create:{userId:u.id,orgId:platform.id,role:'SUPER_ADMIN'},update:{role:'SUPER_ADMIN'}});
  }
  const payin=await p.apiProduct.upsert({where:{code:'PAYIN'},create:{code:'PAYIN',name:'Pay-in (Collections)',description:'Collect payments via mock provider in sandbox'},update:{}}); const payout=await p.apiProduct.upsert({where:{code:'PAYOUT'},create:{code:'PAYOUT',name:'Payouts',description:'Disburse to beneficiaries (ledger-funded)'},update:{}});
