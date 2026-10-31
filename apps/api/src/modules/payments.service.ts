@@ -192,10 +192,10 @@ import { LedgerService, acct } from './ledger.service';
         data: {
           status: nextStatus('PROCESSING', result.status),
           providerRef: result.providerRef,
-          // UTR only from provider response (Mock invents; real APIs return original bank UTR/RRN)
           utr: result.status === 'SUCCESS' ? (result.utr ? String(result.utr) : null) : null,
           failureReason: result.status === 'FAILED' ? result.message : null,
           feePaise: BigInt(result.status === 'SUCCESS' ? feePaise(amount, price?.feeBps || 0, Number(price?.feeFlatPaise || 0)) : 0),
+          metadata: { ...(txn.metadata as any || {}), ...(result.paymentLink ? { paymentLink: result.paymentLink, upiLink: result.upiLink || result.paymentLink, orderId: result.orderId || null } : {}) },
         },
       });
       await tx.transactionAttempt.create({
@@ -226,6 +226,8 @@ import { LedgerService, acct } from './ledger.service';
         merchantRef: t.merchantRef,
         amountPaise: amount,
         status: t.status,
+        paymentLink: result.paymentLink || null,
+        upiLink: result.upiLink || null,
       });
       await this.outbox(tx, t.id, 'TRANSACTION_UPDATED', { transactionId: t.id });
       return t;
@@ -562,10 +564,24 @@ import { LedgerService, acct } from './ledger.service';
     const ns = nextStatus(t.status, r.status);
     if (ns !== t.status) {
       await this.p.$transaction(async tx => {
+        let fee = Number(t.feePaise || 0);
+        if (t.kind === 'PAYIN' && ns === 'SUCCESS') {
+          const prod = await tx.apiProduct.findUnique({ where: { code: 'PAYIN' } });
+          const price = prod ? await tx.pricingPlan.findUnique({ where: { merchantId_productId: { merchantId: t.merchantId, productId: prod.id } } }) : null;
+          fee = feePaise(Number(t.amountPaise), price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+        }
         await tx.transaction.update({
           where: { id: t.id },
-          data: { status: ns, ...(r.utr && ns === 'SUCCESS' ? { utr: String(r.utr) } : {}) },
+          data: { status: ns, ...(t.kind === 'PAYIN' && ns === 'SUCCESS' ? { feePaise: BigInt(fee) } : {}), ...(r.utr && ns === 'SUCCESS' ? { utr: String(r.utr) } : {}) },
         });
+        if (t.kind === 'PAYIN' && ns === 'SUCCESS') {
+          const amount = Number(t.amountPaise);
+          await this.ledger.post(tx, `payin:${t.id}`, 'Payin collection', [
+            { account: 'platform:clearing', merchantId: null, kind: 'PLATFORM', debit: amount, credit: 0 },
+            { account: acct(t.merchantId, 'COLLECTIONS'), merchantId: t.merchantId, kind: 'COLLECTIONS', debit: 0, credit: amount - fee },
+            { account: 'platform:fees', merchantId: null, kind: 'PLATFORM', debit: 0, credit: fee },
+          ]);
+        }
         if (t.kind === 'PAYOUT' && ns === 'FAILED') {
           const amt = Number(t.amountPaise) + Number(t.feePaise);
           await this.ledger.post(tx, `payout-reversal:${t.id}`, 'Payout confirmed failed on status check — hold released', [
@@ -592,6 +608,8 @@ import { LedgerService, acct } from './ledger.service';
           currency: t.currency,
           providerRef: t.providerRef,
           utr: t.utr || null,
+          paymentLink: t.metadata?.paymentLink || null,
+          upiLink: t.metadata?.upiLink || null,
           createdAt: t.createdAt,
         }
       : null;
