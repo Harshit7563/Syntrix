@@ -608,6 +608,7 @@ import { LedgerService, acct } from './ledger.service';
           currency: t.currency,
           providerRef: t.providerRef,
           utr: t.utr || null,
+          failureReason: t.failureReason || null,
           paymentLink: t.metadata?.paymentLink || null,
           upiLink: t.metadata?.upiLink || null,
           createdAt: t.createdAt,

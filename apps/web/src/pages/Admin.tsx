@@ -1030,11 +1030,11 @@ export function AdminTestApi(){
   const qc=useQueryClient();
   const [bucket,setBucket]=useState('ALL');
   const hist=useQuery({queryKey:['testapihist',bucket],queryFn:()=>api('/admin/test-api/history?bucket='+bucket),refetchInterval:12000,retry:false});
-  const [tc,setTc]=useState<any>({providerId:'',kind:'PAYIN',amountRupees:'100',account:'1234567890',ifsc:'HDFC0000001',name:'Test Beneficiary'});
+  const [tc,setTc]=useState<any>({providerId:'',kind:'PAYIN',amountRupees:'100',customerName:'Test Customer',email:'test@gmail.com',mobile:'9876543210',account:'1234567890',ifsc:'HDFC0000001',name:'Test Beneficiary'});
   const [busy,setBusy]=useState(false);
   const [out,setOut]=useState<any>(null);
   const [sel,setSel]=useState<any>(null);
-  const run=async()=>{ const pid=tc.providerId||providers?.[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
+  const run=async()=>{ const pid=tc.providerId||providers?.[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
   const counts=hist.data?.counts||{ALL:0,SUCCESS:0,PENDING:0,FAILED:0};
   const items:any[]=hist.data?.items||[];
   const bucketCls:any={SUCCESS:'bg-emerald-50 text-emerald-700',PENDING:'bg-amber-50 text-amber-700',FAILED:'bg-rose-50 text-rose-700'};
@@ -1068,11 +1068,19 @@ export function AdminTestApi(){
           <label className="label">Amount (₹)</label>
           <input className="input !rounded-xl tnum" type="number" min={1} step="0.01" value={tc.amountRupees} onChange={e=>setTc({...tc,amountRupees:e.target.value})}/>
         </div>
+        {tc.kind==='PAYIN'&&(
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div><label className="label">Customer name</label><input className="input !rounded-xl" value={tc.customerName} onChange={e=>setTc({...tc,customerName:e.target.value})}/></div>
+            <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
+            <div className="sm:col-span-2"><label className="label">Email</label><input className="input !rounded-xl" value={tc.email} onChange={e=>setTc({...tc,email:e.target.value})}/></div>
+          </div>
+        )}
         {tc.kind==='PAYOUT'&&(
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className="label">Account number</label><input className="input !rounded-xl font-mono" value={tc.account} onChange={e=>setTc({...tc,account:e.target.value})}/></div>
             <div><label className="label">IFSC</label><input className="input !rounded-xl font-mono uppercase" value={tc.ifsc} onChange={e=>setTc({...tc,ifsc:e.target.value.toUpperCase()})}/></div>
-            <div className="sm:col-span-2"><label className="label">Beneficiary name</label><input className="input !rounded-xl" value={tc.name} onChange={e=>setTc({...tc,name:e.target.value})}/></div>
+            <div><label className="label">Beneficiary name</label><input className="input !rounded-xl" value={tc.name} onChange={e=>setTc({...tc,name:e.target.value})}/></div>
+            <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={tc.mobile} onChange={e=>setTc({...tc,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></div>
           </div>
         )}
         <button type="button" disabled={busy} className="btn !px-6 !rounded-xl disabled:opacity-60" onClick={run}>{busy?'Running…':'Submit test'}</button>
@@ -1097,6 +1105,8 @@ export function AdminTestApi(){
               <p className="font-mono font-bold text-[14px] text-emerald-800 mt-0.5 break-all">{out.response.utr||'— not returned'}</p>
             </div>
             <div className="rounded-xl bg-[#f7f8fa] px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-slate-400">Provider ref</p><p className="font-mono text-[12px] text-slate-700 mt-0.5 break-all">{out.response.providerRef||'—'}</p></div>
+            {(out.response.upiLink||out.response.paymentLink)&&<div className="rounded-xl bg-sky-50 border border-sky-100 px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-sky-700/70">UPI link</p><p className="font-mono text-[12px] text-sky-900 mt-0.5 break-all">{out.response.upiLink||out.response.paymentLink}</p></div>}
+            {out.response.failureReason&&<div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 col-span-2"><p className="text-[10px] font-bold uppercase text-rose-700/70">Reason</p><p className="text-[13px] text-rose-800 mt-0.5">{out.response.failureReason}</p></div>}
           </div>
         )}
         <div className="flex-1 rounded-2xl bg-[#0b1220] text-slate-100 p-4 overflow-auto min-h-[180px]">

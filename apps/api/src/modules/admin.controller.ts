@@ -150,15 +150,18 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   if(!b.providerId) throw new BadRequestException('Select an API');
   const amountRupees=Number(b.amountRupees); if(!Number.isFinite(amountRupees)||amountRupees<=0) throw new BadRequestException('Enter a valid amount (₹)');
   const amountPaise=Math.round(amountRupees*100);
-  if(kind==='PAYOUT'){ if(!b.account) throw new BadRequestException('Account number required'); if(!b.ifsc||String(b.ifsc).length<4) throw new BadRequestException('IFSC required'); }
+  const mobile=String(b.mobile||'').replace(/\D/g,'').slice(-10);
+  if(mobile.length!==10) throw new BadRequestException('A 10-digit mobile number is required');
+  if(kind==='PAYOUT'){ if(!b.account) throw new BadRequestException('Account number required'); if(!b.ifsc||String(b.ifsc).length<4) throw new BadRequestException('IFSC required'); if(!String(b.name||'').trim()) throw new BadRequestException('Beneficiary name is required'); }
+  if(kind==='PAYIN'){ if(!String(b.customerName||'').trim()) throw new BadRequestException('Customer name is required'); if(!String(b.email||'').includes('@')) throw new BadRequestException('Customer email is required'); }
   const prov=await this.p.provider.findUnique({where:{id:b.providerId}}); if(!prov||!prov.isActive) throw new BadRequestException('API not found or inactive');
   const merchant=await this.p.merchantProfile.findFirst({where:{businessName:'Trust Setu'}})||await this.p.merchantProfile.findFirst({where:{status:'APPROVED'},orderBy:{createdAt:'asc'}});
   if(!merchant) throw new BadRequestException('No merchant available for test — seed Trust Setu first');
   const idem='admin-test-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
   const merchantRef=(kind==='PAYIN'?'admin_pi_':'admin_po_')+Date.now();
   const request=kind==='PAYIN'
-    ?{merchantRef,amountPaise,amountRupees,customer:{name:'Test Customer',email:'test@syntrix.local'},method:'UPI'}
-    :{merchantRef,amountPaise,amountRupees,beneficiary:{name:b.name||'Test Beneficiary',account:String(b.account),ifsc:String(b.ifsc).toUpperCase()},method:'Bank Transfer'};
+    ?{merchantRef,amountPaise,amountRupees,customer:{name:String(b.customerName).trim(),email:String(b.email).trim(),mobile},method:'UPI'}
+    :{merchantRef,amountPaise,amountRupees,beneficiary:{name:String(b.name).trim(),account:String(b.account),ifsc:String(b.ifsc).toUpperCase(),mobile,email:String(b.email||'').trim()},method:'IMPS'};
   const started=Date.now();
   let response:any; let error:string|null=null;
   try{
@@ -168,8 +171,9 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   }catch(e:any){ error=e?.message||String(e); }
   const ms=Date.now()-started;
   const txnStatus=response?.status||(error?'FAILED':null);
-  await this.audit(u,'ADMIN_TEST_API','Provider',prov.id,{kind,amountPaise,ok:!error,ms,merchantRef,status:txnStatus,error});
-  return {ok:!error,kind,ms,status:txnStatus,provider:{id:prov.id,name:prov.name,code:prov.code,isMock:prov.isMock},merchant:{id:merchant.id,name:merchant.businessName},request,response:response||null,error};
+  const fail=error||(txnStatus==='FAILED'?(response?.failureReason||'Transaction failed'):null);
+  await this.audit(u,'ADMIN_TEST_API','Provider',prov.id,{kind,amountPaise,ok:!fail,ms,merchantRef,status:txnStatus,error:fail});
+  return {ok:!fail,kind,ms,status:txnStatus,provider:{id:prov.id,name:prov.name,code:prov.code,isMock:prov.isMock},merchant:{id:merchant.id,name:merchant.businessName},request,response:response||null,error:fail};
  }
  /** Admin Test API history — Success / Pending / Failed (+ rejected before txn). */
  @Get('test-api/history') @Perm('provider:write') async testHistory(@Query('bucket') bucketQ?:string){
