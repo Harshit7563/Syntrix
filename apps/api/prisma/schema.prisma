@@ -137,6 +137,8 @@ model MerchantProfile {
   sandboxEnabled             Boolean             @default(true)
   productionEnabled          Boolean             @default(false)
   completion                 Int                 @default(0)
+  /// Pay-in wallet reserve. This much stays in collections and cannot move to payout.
+  walletHoldPaise            BigInt              @default(0)
   directors                  Director[]
   owners                     BeneficialOwner[]
   bankAccounts               BankAccount[]
