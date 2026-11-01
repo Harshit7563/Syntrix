@@ -79,46 +79,6 @@ function StatBox({label,value,sub,accent}:{label:string,value:any,sub?:string,ac
 
 function StepHead({n,title,sub,color}:{n:number,title:string,sub:string,color:string}){ return <div className="flex items-center gap-3 mb-3"><span className={`w-7 h-7 rounded-full ${color} text-white flex items-center justify-center text-[13px] font-extrabold shrink-0 shadow-sm`}>{n}</span><div><h3 className="font-bold text-[15px] text-slate-900 leading-tight">{title}</h3><p className="text-xs text-slate-400">{sub}</p></div></div>; }
 
-function Chip(){
-  return <span className="relative block w-11 h-8 rounded-[6px] overflow-hidden shadow-inner" style={{background:'linear-gradient(135deg,#f8e7a2,#e0b43a 48%,#fff4c4)'}}>
-    <span className="absolute left-0 right-0 top-[38%] h-px bg-black/25"/>
-    <span className="absolute left-0 right-0 top-[62%] h-px bg-black/20"/>
-    <span className="absolute top-0 bottom-0 left-[32%] w-px bg-black/20"/>
-    <span className="absolute top-0 bottom-0 left-[68%] w-px bg-black/15"/>
-  </span>;
-}
-function AtmCard({kind,apiName,charge,balance,onClick}:{kind:'PAYIN'|'PAYOUT';apiName:string;charge:any;balance:string;onClick:()=>void}){
-  const payin=kind==='PAYIN';
-  return <button type="button" onClick={onClick} className="group relative w-full overflow-hidden rounded-[22px] text-left text-white shadow-[0_16px_36px_rgba(15,23,42,.22)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,.28)]" style={{background:payin?'linear-gradient(128deg,#18181b 0%,#3f3f46 38%,#09090b 72%,#27272a 100%)':'linear-gradient(128deg,#052e24 0%,#0f766e 40%,#042f2e 74%,#134e4a 100%)',minHeight:188}}>
-    <span className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl"/>
-    <span className="pointer-events-none absolute -left-8 bottom-0 h-24 w-40 rounded-full bg-white/5 blur-2xl"/>
-    <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition duration-700 group-hover:translate-x-[420%] group-hover:opacity-100"/>
-    <span className="relative flex min-h-[188px] flex-col p-5">
-      <span className="flex items-start justify-between">
-        <span>
-          <span className="block text-[10px] font-bold tracking-[.28em] text-white/45">SYNTRIX</span>
-          <span className="mt-1 block text-[15px] font-semibold">{payin?'Pay-in':'Payout'}</span>
-        </span>
-        <span className="flex items-center gap-3">
-          <Chip/>
-          <svg className="h-6 w-6 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8.5 8.5a5 5 0 0 1 7 0"/><path d="M6 6a8.5 8.5 0 0 1 12 0"/><path d="M11 12.5h2"/></svg>
-        </span>
-      </span>
-      <span className="mt-6 block text-[30px] font-bold leading-none tracking-tight tnum">{balance}</span>
-      <span className="mt-1 block text-[11px] font-semibold tracking-wide text-white/45">Total balance</span>
-      <span className="mt-auto flex items-end justify-between gap-3 pt-4">
-        <span className="min-w-0">
-          <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">API</span>
-          <span className="block truncate text-[16px] font-bold">{apiName}</span>
-        </span>
-        <span className="text-right">
-          <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">CHARGE</span>
-          <span className="block text-[16px] font-bold tnum">{charge}{charge==='—'?'':'%'}</span>
-        </span>
-      </span>
-    </span>
-  </button>;
-}
 function ApiSwitch(){
   const {data,refetch}=useQ('apiswitch','/admin/api-switch');
   const payin=useQ('adpstatsPAYIN','/admin/provider-stats?kind=PAYIN');
@@ -131,7 +91,7 @@ function ApiSwitch(){
   const [busy,setBusy]=useState('');
   const [pick,setPick]=useState<{PAYIN:string;PAYOUT:string}>({PAYIN:'',PAYOUT:''});
   const [sel,setSel]=useState('');
-  const [keysOpen,setKeysOpen]=useState(false);
+  const [keysOpen,setKeysOpen]=useState('');
   const [testNote,setTestNote]=useState<any>(null);
   const provsQ=useQ('aprov','/admin/providers');
   const merchants=useQ('merchant-desk','/merchant-desk');
@@ -194,110 +154,63 @@ function ApiSwitch(){
   const full=(Array.isArray(provsQ.data)?provsQ.data:[]).find((p:any)=>p.id===selected?.id);
   const sumKind=(kind:'PAYIN'|'PAYOUT')=>{ const st=selected?stat(kind,selected.id):null; return {total:Number(st?.totalAmountPaise||0),today:Number(st?.todayAmountPaise||0),rate:(()=>{ const sc=st?.successCount||0,fl=st?.failedCount||0; return (sc+fl)?Math.round(sc/(sc+fl)*100):null; })()}; };
   const pi=sumKind('PAYIN'), po=sumKind('PAYOUT');
-  const Lane=({pc,title,tone}:{pc:'PAYIN'|'PAYOUT';title:string;tone:string})=>{
-    if(!selected) return null;
-    const st=stat(pc,selected.id); const r=routeFor(selected.id,pc); const on=!!r?.isActive; const rg=getRange(selected.id,pc); const dirty=!!draft[draftKey(selected.id,pc)];
-    const sc=st?.successCount||0, fl=st?.failedCount||0; const rate=(sc+fl)?Math.round(sc/(sc+fl)*100):null;
-    return <div className="rounded-[20px] border border-slate-100 p-4">
-      <div className="flex items-center gap-3">
-        <span className={`w-10 h-10 rounded-2xl shrink-0 ${tone}`}/>
-        <div className="min-w-0 flex-1">
-          <p className="font-bold text-slate-900">{title}</p>
-          <p className="text-[12.5px] text-slate-400">{on?'This API is taking these payments.':'Off. New payments will not use it.'}</p>
-        </div>
-        <button type="button" disabled={busy===`tog-${selected.id}-${pc}`} onClick={()=>toggle(selected.id,pc)} className={`relative w-11 h-6 rounded-full shrink-0 transition ${on?'bg-emerald-500':'bg-slate-300'} disabled:opacity-60`}>
-          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition ${on?'left-[22px]':'left-0.5'}`}/>
-        </button>
-      </div>
-      <div className="grid grid-cols-3 gap-2 mt-4">
-        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className="text-[16px] font-bold tnum text-slate-900">{inr(st?.totalAmountPaise||0)}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Total</p></div>
-        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className="text-[16px] font-bold tnum text-slate-900">{inr(st?.todayAmountPaise||0)}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Today</p></div>
-        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className={`text-[16px] font-bold tnum ${rate==null?'text-slate-400':'text-slate-900'}`}>{rate==null?'—':rate+'%'}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Success</p></div>
-      </div>
-      <div className="flex flex-wrap items-end gap-2 mt-4">
-        <div><label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">From ₹</label><input className="mt-1 w-28 rounded-xl border border-slate-200 bg-[#f7f8fa] px-3 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="0" value={rg.min} onChange={e=>setRange(selected.id,pc,{min:e.target.value})}/></div>
-        <div><label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">To ₹</label><input className="mt-1 w-28 rounded-xl border border-slate-200 bg-[#f7f8fa] px-3 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="No max" value={rg.max} onChange={e=>setRange(selected.id,pc,{max:e.target.value})}/></div>
-        {dirty&&<button type="button" disabled={busy===`save-${selected.id}-${pc}`} onClick={()=>saveRange(selected.id,pc)} className="h-10 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold">{busy===`save-${selected.id}-${pc}`?'Saving…':'Save range'}</button>}
-      </div>
-    </div>;
-  };
-
   const books=Array.isArray(merchants.data)?merchants.data:[];
   const book=(k:string)=>books.reduce((a:number,m:any)=>a+Number(m[k]||0),0);
   const fee=(k:string)=>{ const vals=[...new Set(books.map((m:any)=>m[k]).filter((v:any)=>v!=null&&v!==''))]; return vals.length===1?vals[0]:'—'; };
-  const apiName=(pc:'PAYIN'|'PAYOUT')=>{ const p=providers.find((x:any)=>x.id===liveId(pc)); return p?String(p.name||'').split(' (')[0]:'No API'; };
-  return <div className="flex-1 min-h-0 flex flex-col gap-3">
-    <div className="shrink-0 grid md:grid-cols-2 gap-3">
-      <AtmCard kind="PAYIN" apiName={apiName('PAYIN')} charge={fee('payinChargePercent')} balance={inr(book('payinPaise'))} onClick={()=>{ const id=liveId('PAYIN'); if(id) setSel(id); }}/>
-      <AtmCard kind="PAYOUT" apiName={apiName('PAYOUT')} charge={fee('payoutChargePercent')} balance={inr(book('payoutPaise'))} onClick={()=>{ const id=liveId('PAYOUT'); if(id) setSel(id); }}/>
-    </div>
-    <div className="flex-1 min-h-0 bg-white rounded-[16px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden flex">
-      <aside className="w-[260px] shrink-0 border-r border-slate-100 flex flex-col min-h-0">
-        <div className="px-4 py-3 border-b border-slate-100"><p className="text-[13px] font-bold text-slate-900">APIs <span className="text-slate-400 font-semibold">{providers.length}</span></p></div>
-        <div className="flex-1 min-h-0 overflow-auto">
-          {!providers.length&&<p className="px-4 py-8 text-center text-[13px] text-slate-400">No API connected.</p>}
-          {providers.map((pr:any,i:number)=>{
-            const on=pr.id===(selected?.id);
-            const live=liveId('PAYIN')===pr.id||liveId('PAYOUT')===pr.id;
-            return <button key={pr.id} type="button" onClick={()=>setSel(pr.id)} className={`w-full text-left px-3 py-3 border-b border-slate-50 flex items-center gap-3 ${on?'bg-[#f4f6f8]':'hover:bg-[#fafbfd]'}`}>
-              <span className="w-9 h-9 rounded-xl text-white grid place-items-center text-[13px] font-extrabold shrink-0" style={{background:avatars[i%avatars.length]}}>{(pr.name||'?').charAt(0)}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13.5px] font-semibold text-slate-900 truncate">{String(pr.name||'').split(' (')[0]}</span>
-                <span className="block text-[11.5px] text-slate-400 truncate">{pr.code} · {pr.isMock?'Sandbox':'Live'}</span>
-              </span>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${live?'bg-emerald-500':'bg-slate-300'}`}/>
-            </button>;
-          })}
+  const liveProv=(pc:'PAYIN'|'PAYOUT')=>providers.find((x:any)=>x.id===liveId(pc));
+  const Setup=({pc}:{pc:'PAYIN'|'PAYOUT'})=>{
+    const p=liveProv(pc); const r=p?routeFor(p.id,pc):null; const on=!!r?.isActive; const circ=!!p?.circuitOpen;
+    const full=(Array.isArray(provsQ.data)?provsQ.data:[]).find((x:any)=>x.id===p?.id);
+    const masked=(full?.keys||[]).find((k:any)=>k.isActive)?.masked||'';
+    const charge=fee(pc==='PAYIN'?'payinChargePercent':'payoutChargePercent');
+    const balance=inr(book(pc==='PAYIN'?'payinPaise':'payoutPaise'));
+    const status=circ?'Error':on?'Connected':'Not connected';
+    const statusCls=circ?'text-rose-500':on?'text-emerald-600':'text-slate-400';
+    const dot=circ?'bg-rose-500':on?'bg-emerald-500':'bg-slate-300';
+    return <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(15,23,42,.05)] p-4 flex flex-col min-h-[220px]">
+      <div className="flex items-start gap-3">
+        <span className={`w-9 h-9 rounded-xl grid place-items-center text-[14px] shrink-0 ${pc==='PAYIN'?'bg-orange-50 text-orange-500':'bg-slate-100 text-slate-700'}`}>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-[15px] text-slate-900 leading-tight truncate">{p?String(p.name||'').split(' (')[0]:'No API'}</p>
+          <p className="text-[12px] text-slate-400 mt-0.5">{pc==='PAYIN'?'Pay-in':'Payout'}</p>
         </div>
-      </aside>
-      <section className="flex-1 min-w-0 min-h-0 overflow-auto p-5">
-        {!selected&&<div className="h-full grid place-items-center text-[13px] text-slate-400">No API connected.</div>}
-        {selected&&<div className="max-w-3xl space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[18px] font-bold text-slate-900">{String(selected.name||'').split(' (')[0]}</p>
-              <p className="text-[12.5px] text-slate-400">{selected.code} · {selected.isMock?'Sandbox provider':'Live provider'}</p>
-            </div>
-            {(liveId('PAYIN')!==selected.id||liveId('PAYOUT')!==selected.id)&&<button type="button" disabled={busy==='live'} onClick={async()=>{ setBusy('live'); try{ await api('/admin/api-switch/use',{method:'POST',body:{productCode:'PAYIN',providerId:selected.id}}); await api('/admin/api-switch/use',{method:'POST',body:{productCode:'PAYOUT',providerId:selected.id}}); flash('Live for pay-in and payout'); refetch(); }catch(e:any){ flash(e.message);} finally{ setBusy(''); } }} className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold">{busy==='live'?'Switching…':'Use for both'}</button>}
-            {msg&&<span className="text-[12.5px] font-semibold text-emerald-700">{msg}</span>}
-          </div>
-          {selected.circuitOpen&&<div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
-            <span className="text-[12.5px] font-semibold text-amber-800 flex-1">Circuit is open. New payments skip this API.</span>
-            <button className="text-[12.5px] font-bold text-amber-900 underline" disabled={busy==='circ-'+selected.id} onClick={()=>resetCircuit(selected.id)}>Reset</button>
-          </div>}
-          <div className="grid lg:grid-cols-2 gap-3">
-            <Lane pc="PAYIN" title="Pay-in" tone="bg-[#f8d5c8]"/>
-            <Lane pc="PAYOUT" title="Payout" tone="bg-[#d8f0e2]"/>
-          </div>
-          <div className="rounded-[20px] bg-[#f7f8fa] px-4 py-3 flex flex-wrap items-center gap-2">
-            <span className="text-[12.5px] font-semibold text-slate-600">Which API takes</span>
-            <div className="flex rounded-full bg-white p-1 border border-slate-200">
-              {([['PAYIN','Pay-in'],['PAYOUT','Payout']] as const).map(([k,l])=>(
-                <button key={k} type="button" onClick={()=>{setPreviewPc(k);setPreview(null);}} className={`h-8 px-3 rounded-full text-[12.5px] font-semibold ${previewPc===k?'bg-slate-900 text-white':'text-slate-500'}`}>{l}</button>
-              ))}
-            </div>
-            <div className="flex items-center rounded-full border border-slate-200 bg-white overflow-hidden">
-              <span className="pl-3 text-slate-400 text-[13px]">₹</span>
-              <input className="w-24 px-2 py-2 text-[13px] outline-none" type="number" min={0} value={previewAmt} onChange={e=>setPreviewAmt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&check()}/>
-            </div>
-            <button type="button" className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold" onClick={check}>Check</button>
-            {preview&&<span className={`text-[13px] font-semibold ${preview.matched?'text-emerald-700':'text-rose-600'}`}>{preview.matched?`→ ${String(preview.provider?.name||'').split(' (')[0]}`:'No API covers this amount'}</span>}
-          </div>
-          <div className="rounded-[20px] border border-slate-100 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <p className="text-[13px] font-bold text-slate-900 flex-1">Key</p>
-              <button type="button" className="h-8 px-3 rounded-full border border-slate-200 text-[12px] font-semibold text-slate-600" onClick={()=>selected&&testConn(selected.id)}>Test</button>
-              <button type="button" className="h-8 px-3 rounded-full bg-slate-900 text-white text-[12px] font-semibold" onClick={()=>setKeysOpen(v=>!v)}>{keysOpen?'Close':'Manage'}</button>
-            </div>
-            <p className="text-[12.5px] text-slate-400 mt-1">{(full?.keys||[]).find((k:any)=>k.isActive)?.masked||'No key attached'}</p>
-            {testNote&&<p className={`mt-2 text-[12.5px] ${testNote.ok?'text-emerald-700':'text-rose-600'}`}>{testNote.ok?'Connected':'Failed'}{testNote.ms?` · ${testNote.ms}ms`:''}{testNote.note?` · ${testNote.note}`:''}</p>}
-            {keysOpen&&full&&<ProviderKeys prov={full} refresh={()=>{ provsQ.refetch(); }}/>}
-          </div>
-        </div>}
-      </section>
+        <span className={`inline-flex items-center gap-1.5 text-[12.5px] font-semibold shrink-0 ${statusCls}`}><span className={`w-1.5 h-1.5 rounded-full ${dot}`}/>{status}</span>
+      </div>
+      <p className="text-[13px] leading-relaxed text-slate-500 mt-3">Charge {charge}{charge==='—'?'':'%'} · Balance {balance}</p>
+      <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-[#fafafa] px-3 h-10">
+        <span className="flex-1 truncate font-mono text-[12.5px] text-slate-500">{masked||'No key saved'}</span>
+        {masked&&<button type="button" className="text-slate-400 hover:text-slate-700" title="Copy" onClick={()=>navigator.clipboard.writeText(masked)}>
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        </button>}
+      </div>
+      <div className="mt-auto pt-4 flex items-center justify-between">
+        <button type="button" disabled={!p||busy===`tog-${p?.id}-${pc}`} onClick={()=>p&&toggle(p.id,pc)} className={`relative w-11 h-6 rounded-full transition ${on?'bg-[#f5a623]':'bg-slate-200'} disabled:opacity-50`}>
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition ${on?'left-[22px]':'left-0.5'}`}/>
+        </button>
+        <div className="flex items-center gap-3">
+          <button type="button" className="text-[12.5px] font-medium text-slate-400 hover:text-slate-700" onClick={()=>setKeysOpen(keysOpen===pc?'':pc)}>{keysOpen===pc?'Close':'Keys'}</button>
+          <button type="button" disabled={!p} onClick={()=>{ if(!p) return; setSel(p.id); testConn(p.id); }} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-500 hover:text-slate-800 disabled:opacity-40">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12a9 9 0 1 1-2.2-5.8"/><path d="M21 3v6h-6"/></svg>
+            Test Connection
+          </button>
+        </div>
+      </div>
+      {testNote&&selected?.id===p?.id&&<p className={`mt-2 text-[12.5px] ${testNote.ok?'text-emerald-600':'text-rose-500'}`}>{testNote.ok?'Connected':'Failed'}{testNote.ms?` · ${testNote.ms}ms`:''}{testNote.note?` · ${testNote.note}`:''}</p>}
+      {keysOpen===pc&&full&&<ProviderKeys prov={full} refresh={()=>{ provsQ.refetch(); }}/>}
+      {circ&&<button type="button" className="mt-2 text-left text-[12px] font-semibold text-amber-700 underline" disabled={busy==='circ-'+p.id} onClick={()=>resetCircuit(p.id)}>Reset circuit</button>}
+    </div>;
+  };
+  return <div className="flex-1 min-h-0 overflow-auto">
+    <div className="grid md:grid-cols-2 gap-4">
+      <Setup pc="PAYIN"/>
+      <Setup pc="PAYOUT"/>
     </div>
+    {msg&&<p className="mt-3 text-[13px] font-medium text-emerald-700">{msg}</p>}
   </div>;
 }
+
 
 
 function ProviderKeys({prov,refresh}:{prov:any,refresh:()=>void}){ const [f,setF]=useState({label:'',apiKey:'',apiSecret:''}); const [msg,setMsg]=useState('');
@@ -335,10 +248,13 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
  const avatars=['#111','#f4a28c','#9ad4b5','#9ec5e8','#c9b8e8','#f0c96a'];
  const apis=(Array.isArray(data)?data:[]).filter((p:any)=>p.isActive!==false);
 
- return <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-3">
-  <div className="shrink-0 flex items-center justify-end gap-2">
-      <a href="/app/test-api" className="h-9 px-4 rounded-full border border-slate-200 bg-white text-slate-800 text-[12.5px] font-semibold hover:bg-slate-50 inline-flex items-center">Test API</a>
-      <button type="button" className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'Add API'}</button>
+ return <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-4">
+  <div className="shrink-0 flex items-end justify-between gap-3">
+    <div>
+      <h2 className="text-[22px] font-bold tracking-tight text-slate-900">API Setups</h2>
+      <p className="text-[13px] text-slate-400 mt-0.5">Manage pay-in and payout connections.</p>
+    </div>
+    <button type="button" className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 hover:bg-slate-50" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'Add API'}</button>
   </div>
 
   {showAdd&&<section className="shrink-0 max-h-[46%] overflow-auto">
