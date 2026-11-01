@@ -10,7 +10,7 @@ import { TxnEventsService } from './txn-events.service';
 
   private async memberFor(merchantId: string, memberId?: string) {
     const id = String(memberId || '').trim();
-    if (!id) return undefined;
+    if (!id) throw new BadRequestException('A member id is required. Direct pay-in and payout are not allowed.');
     const m = await this.p.portalMember.findFirst({ where: { id, merchantId, status: 'ACTIVE' } });
     if (!m) throw new BadRequestException('Choose an active member');
     return m.id;
@@ -64,10 +64,10 @@ import { TxnEventsService } from './txn-events.service';
    * Never falls back to a random Provider — only matching routing rules.
    */
   private async providerFor(merchantId: string, productCode: string, amountPaise?: number) {
-    const rules = await this.p.routingRule.findMany({
-      where: { productCode, isActive: true, OR: [{ merchantId }, { merchantId: null }] },
-      orderBy: { priority: 'asc' },
-    });
+    const own = await this.p.routingRule.findMany({ where: { productCode, merchantId }, orderBy: { priority: 'asc' } });
+    const rules = own.length
+      ? own.filter(r => r.isActive)
+      : await this.p.routingRule.findMany({ where: { productCode, merchantId: null, isActive: true }, orderBy: { priority: 'asc' } });
     const skip = await this.openCircuitIds();
     const mapped = rules.map(r => ({
       id: r.id,
@@ -154,6 +154,15 @@ import { TxnEventsService } from './txn-events.service';
   private async pricing(merchantId: string, productId: string) {
     return this.p.pricingPlan.findUnique({ where: { merchantId_productId: { merchantId, productId } } });
   }
+  /** Slab that contains the amount wins. If none, the merchant's flat plan is used. */
+  private async commissionFor(merchantId: string, productCode: string, amount: number, price: { feeBps?: number; feeFlatPaise?: bigint | null } | null) {
+    const slabs = await this.p.commissionSlab.findMany({ where: { merchantId, productCode, isActive: true } });
+    const fits = slabs.filter(s => amount >= Number(s.minAmountPaise) && (s.maxAmountPaise == null || amount <= Number(s.maxAmountPaise)));
+    fits.sort((a, b) => Number(b.minAmountPaise) - Number(a.minAmountPaise));
+    const hit = fits[0];
+    if (hit) return feePaise(amount, hit.feeBps, Number(hit.feeFlatPaise));
+    return feePaise(amount, price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+  }
   private outbox(tx: any, aggregateId: string, type: string, payload: any) {
     return tx.outboxEvent.create({ data: { aggregate: 'Transaction', aggregateId, type, payload } });
   }
@@ -181,6 +190,7 @@ import { TxnEventsService } from './txn-events.service';
     }
     const product = await this.checkAccess(merchant.id, env, 'PAYIN');
     const price = await this.pricing(merchant.id, product.id);
+    const payinFee = await this.commissionFor(merchant.id, 'PAYIN', amount, price);
     if (price?.txnLimitPaise && BigInt(amount) > price.txnLimitPaise) {
       throw new BadRequestException('Amount exceeds your per-transaction limit');
     }
@@ -234,7 +244,7 @@ import { TxnEventsService } from './txn-events.service';
           providerRef: result.providerRef,
           utr: result.status === 'SUCCESS' ? (result.utr ? String(result.utr) : null) : null,
           failureReason: result.status === 'FAILED' ? result.message : null,
-          feePaise: BigInt(result.status === 'SUCCESS' ? feePaise(amount, price?.feeBps || 0, Number(price?.feeFlatPaise || 0)) : 0),
+          feePaise: BigInt(result.status === 'SUCCESS' ? payinFee : 0),
           metadata: { ...(txn.metadata as any || {}), ...(result.paymentLink ? { paymentLink: result.paymentLink, upiLink: result.upiLink || result.paymentLink, orderId: result.orderId || null } : {}) },
         },
       });
@@ -327,7 +337,7 @@ import { TxnEventsService } from './txn-events.service';
     const linkedMemberId = await this.memberFor(merchant.id, body.memberId);
     const product = await this.checkAccess(merchant.id, env, 'PAYOUT');
     const price = await this.pricing(merchant.id, product.id);
-    const fee = feePaise(amount, price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+    const fee = await this.commissionFor(merchant.id, 'PAYOUT', amount, price);
     const need = amount + fee;
     if (price?.txnLimitPaise && BigInt(amount) > price.txnLimitPaise) {
       throw new BadRequestException(`Amount exceeds your per-payout limit of ₹${(Number(price.txnLimitPaise) / 100).toFixed(2)}`);
@@ -612,7 +622,7 @@ import { TxnEventsService } from './txn-events.service';
         if (t.kind === 'PAYIN' && ns === 'SUCCESS') {
           const prod = await tx.apiProduct.findUnique({ where: { code: 'PAYIN' } });
           const price = prod ? await tx.pricingPlan.findUnique({ where: { merchantId_productId: { merchantId: t.merchantId, productId: prod.id } } }) : null;
-          fee = feePaise(Number(t.amountPaise), price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+          fee = await this.commissionFor(t.merchantId, 'PAYIN', Number(t.amountPaise), price);
         }
         await tx.transaction.update({
           where: { id: t.id },
@@ -671,7 +681,7 @@ import { TxnEventsService } from './txn-events.service';
     await this.p.$transaction(async tx => {
       const prod = await tx.apiProduct.findUnique({ where: { code: 'PAYIN' } });
       const price = prod ? await tx.pricingPlan.findUnique({ where: { merchantId_productId: { merchantId: t.merchantId, productId: prod.id } } }) : null;
-      const fee = feePaise(Number(t.amountPaise), price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
+      const fee = await this.commissionFor(t.merchantId, 'PAYIN', Number(t.amountPaise), price);
       const updated = await tx.transaction.updateMany({
         where: { id: t.id, status: { in: ['PROCESSING', 'PENDING'] } },
         data: { status: 'SUCCESS', utr, feePaise: BigInt(fee), providerRef: t.providerRef || t.merchantRef },

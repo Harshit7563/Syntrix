@@ -101,6 +101,16 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   await this.audit(u,'API_ROUTE_ACTIVATE_'+b.productCode,'RoutingRule',rule.id);
   return {switched:true,productCode:b.productCode,route:this.viewRule(rule),provider:{id:prov.id,name:prov.name,code:prov.code}};
  }
+ /** One live API for the product. Other platform routes for that product turn off. */
+ @Post('api-switch/use') @Perm('provider:write') async useOne(@CurrentUser() u:any,@Body() b:any){
+  if(!['PAYIN','PAYOUT'].includes(b.productCode)) throw new BadRequestException('productCode must be PAYIN or PAYOUT');
+  const prov=await this.p.provider.findUnique({where:{id:b.providerId}}); if(!prov||!prov.isActive) throw new BadRequestException('Select an active provider');
+  await this.p.routingRule.updateMany({where:{productCode:b.productCode,merchantId:null,NOT:{providerId:prov.id}},data:{isActive:false}});
+  const ex=await this.p.routingRule.findFirst({where:{productCode:b.productCode,merchantId:null,providerId:prov.id}});
+  const rule=ex?await this.p.routingRule.update({where:{id:ex.id},data:{isActive:true,priority:1}}):await this.p.routingRule.create({data:{productCode:b.productCode,providerId:prov.id,isActive:true,priority:1}});
+  await this.audit(u,'API_SWITCH_'+b.productCode,'RoutingRule',rule.id);
+  return {switched:true,productCode:b.productCode,provider:{id:prov.id,name:prov.name,code:prov.code}};
+ }
  @Post('api-switch/:id/deactivate') @Perm('provider:write') async deactivateRoute(@CurrentUser() u:any,@Param('id') id:string){
   const r=await this.p.routingRule.findUnique({where:{id}}); if(!r) throw new BadRequestException('Route not found');
   const up=await this.p.routingRule.update({where:{id},data:{isActive:false},include:{provider:{select:{id:true,name:true,code:true,isMock:true}}}});
@@ -157,8 +167,11 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   if(kind==='PAYOUT'){ if(!b.account) throw new BadRequestException('Account number required'); if(!b.ifsc||String(b.ifsc).length<4) throw new BadRequestException('IFSC required'); if(!String(b.name||'').trim()) throw new BadRequestException('Beneficiary name is required'); }
   if(kind==='PAYIN'){ if(!String(b.customerName||'').trim()) throw new BadRequestException('Customer name is required'); if(!String(b.email||'').includes('@')) throw new BadRequestException('Customer email is required'); }
   const prov=await this.p.provider.findUnique({where:{id:b.providerId}}); if(!prov||!prov.isActive) throw new BadRequestException('API not found or inactive');
-  const merchant=await this.p.merchantProfile.findFirst({where:{businessName:'Trust Setu'}})||await this.p.merchantProfile.findFirst({where:{status:'APPROVED'},orderBy:{createdAt:'asc'}});
-  if(!merchant) throw new BadRequestException('No merchant available for test — seed Trust Setu first');
+  if(!b.memberId) throw new BadRequestException('Select a member. Transactions run by member id, not directly.');
+  const member=await this.p.portalMember.findUnique({where:{id:String(b.memberId)}});
+  if(!member||member.status!=='ACTIVE') throw new BadRequestException('Choose an active member');
+  const merchant=await this.p.merchantProfile.findUnique({where:{id:member.merchantId}});
+  if(!merchant) throw new BadRequestException('Member is not linked to a merchant');
   const idem='admin-test-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
   const merchantRef=(kind==='PAYIN'?'admin_pi_':'admin_po_')+Date.now();
   const request=kind==='PAYIN'

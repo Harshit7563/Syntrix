@@ -89,6 +89,7 @@ function ApiSwitch(){
   const [preview,setPreview]=useState<any>(null);
   const [draft,setDraft]=useState<Record<string,{min:string;max:string}>>({});
   const [busy,setBusy]=useState('');
+  const [pick,setPick]=useState<{PAYIN:string;PAYOUT:string}>({PAYIN:'',PAYOUT:''});
   if(!data) return <div className="grid md:grid-cols-2 gap-3">{[1,2].map(i=><div key={i} className="h-48 rounded-[22px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   const flash=(t:string)=>{ setMsg(t); setTimeout(()=>setMsg(''),2800); };
@@ -131,6 +132,13 @@ function ApiSwitch(){
     finally{ setBusy(''); }
   };
   const check=async()=>{ try{ setPreview(await api(`/admin/api-switch/preview?productCode=${previewPc}&amountRupees=${encodeURIComponent(previewAmt)}`)); }catch(e:any){ flash(e.message); } };
+  const liveId=(pc:'PAYIN'|'PAYOUT')=>data.active?.[pc]?.providerId||data.active?.[pc]?.provider?.id||'';
+  const useApi=async(pc:'PAYIN'|'PAYOUT')=>{
+    const pid=pick[pc]||liveId(pc); if(!pid) return flash('Select an API'); setBusy(pc);
+    try{ await api('/admin/api-switch/use',{method:'POST',body:{productCode:pc,providerId:pid}}); flash(pc==='PAYIN'?'Pay-in switched':'Payout switched'); setPick({...pick,[pc]:''}); refetch(); }
+    catch(e:any){ flash(e.message); }
+    finally{ setBusy(''); }
+  };
   const providers:any[]=data.providers||[];
   const fmtShort=(paise:number)=>{ const n=Number(paise||0)/100; if(n>=10000000) return (n/10000000).toFixed(1)+'Cr'; if(n>=100000) return (n/100000).toFixed(1)+'L'; if(n>=1000) return (n/1000).toFixed(1)+'k'; return Math.round(n).toLocaleString('en-IN'); };
 
@@ -205,6 +213,22 @@ function ApiSwitch(){
   );
 
   return <div className="space-y-6">
+    <div className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4">
+      <h3 className="text-[16px] font-bold text-slate-900">API Switch</h3>
+      <p className="text-[12.5px] text-slate-400 mt-0.5">One live API for pay-in and one for payout. Switch turns the other platform APIs off for that side.</p>
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        {(['PAYIN','PAYOUT'] as const).map(pc=>(
+          <div key={pc} className="flex items-center gap-2">
+            <span className="w-16 text-[13px] font-semibold text-slate-700">{pc==='PAYIN'?'Pay-in':'Payout'}</span>
+            <select className="input !rounded-xl flex-1" value={pick[pc]||liveId(pc)} onChange={e=>setPick({...pick,[pc]:e.target.value})}>
+              <option value="">Select API</option>
+              {providers.map((p:any)=><option key={p.id} value={p.id}>{String(p.name||'').split(' (')[0]}</option>)}
+            </select>
+            <button type="button" className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60" disabled={busy===pc} onClick={()=>useApi(pc)}>{busy===pc?'…':'Switch'}</button>
+          </div>
+        ))}
+      </div>
+    </div>
     <div className="grid lg:grid-cols-2 gap-6">
       <Col pc="PAYIN" title="Pay-in" sub="Collection routing & ranges"/>
       <Col pc="PAYOUT" title="Payout" sub="Disbursement routing & ranges"/>
@@ -1055,7 +1079,7 @@ export function AdminTestApi(){
     setCopied(true); setTimeout(()=>setCopied(false),1500);
   };
   const activeProviders=(providers||[]).filter((p:any)=>p.isActive!==false);
-  const run=async()=>{ const pid=tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),memberId:tc.memberId||undefined,customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
+  const run=async()=>{ const pid=tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); if(!tc.memberId) return setOut({ok:false,error:'Select a member. Transaction runs by member id, not directly.'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),memberId:tc.memberId,customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
   const counts=hist.data?.counts||{ALL:0,SUCCESS:0,PENDING:0,FAILED:0};
   const items:any[]=hist.data?.items||[];
   const bucketCls:any={SUCCESS:'bg-emerald-50 text-emerald-700',PENDING:'bg-amber-50 text-amber-700',FAILED:'bg-rose-50 text-rose-700'};
@@ -1097,7 +1121,7 @@ export function AdminTestApi(){
           const m=(Array.isArray(memberList.data)?memberList.data:[]).find((x:any)=>x.id===id);
           setTc({...tc,memberId:id,customerName:m?.name||tc.customerName,mobile:m?.mobile||tc.mobile,email:m?.email||tc.email,name:m?.name||tc.name});
         }}>
-          <option value="">No member</option>
+          <option value="">Select member</option>
           {(Array.isArray(memberList.data)?memberList.data:[]).filter((m:any)=>m.status==='ACTIVE').map((m:any)=><option key={m.id} value={m.id}>{m.name} · {m.mobile}</option>)}
         </select>
       </div>

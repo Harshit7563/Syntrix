@@ -151,6 +151,7 @@ model MerchantProfile {
   invoices                   Invoice[]
   usage                      UsageRecord[]
   members                    PortalMember[]
+  slabs                      CommissionSlab[]
   createdAt                  DateTime            @default(now())
   updatedAt                  DateTime            @updatedAt
 
@@ -458,6 +459,22 @@ model PortalMember {
 
   @@unique([merchantId, mobile])
   @@index([merchantId])
+}
+
+model CommissionSlab {
+  id             String          @id @default(cuid())
+  merchantId     String
+  merchant       MerchantProfile @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  productCode    String
+  minAmountPaise BigInt          @default(0)
+  maxAmountPaise BigInt?
+  feeBps         Int             @default(0)
+  feeFlatPaise   BigInt          @default(0)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([merchantId, productCode, isActive])
 }
 
 model TransactionAttempt {
