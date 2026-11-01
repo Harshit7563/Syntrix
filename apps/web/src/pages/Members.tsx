@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, inr, Status } from '../api';
+import { api, inr } from '../api';
+
+const card = 'bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)]';
+const avatars = ['#111', '#f4a28c', '#9ad4b5', '#9ec5e8', '#c9b8e8', '#f0c96a'];
 
 export function MerchantDesk() {
   const qc = useQueryClient();
@@ -9,52 +12,83 @@ export function MerchantDesk() {
   const rows = Array.isArray(list.data) ? list.data : [];
   const current = rows.find((m: any) => m.id === open);
   const refresh = () => qc.invalidateQueries({ queryKey: ['merchant-desk'] });
+  const sum = (k: string) => rows.reduce((a: number, m: any) => a + Number(m[k] || 0), 0);
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 w-full">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-black tracking-tight text-slate-900">Merchant</h1>
-          <p className="text-[13px] text-slate-500 mt-1">Name, email, pay-in and payout API charge, wallet hold, and member active or deactive.</p>
+          <p className="text-[13px] text-slate-500 mt-1">{rows.length} merchant{rows.length === 1 ? '' : 's'} · charges, wallet hold, and members</p>
         </div>
         {open ? (
-          <button type="button" className="btn-ghost !rounded-xl" onClick={() => setOpen(null)}>All merchants</button>
+          <button type="button" className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-700" onClick={() => setOpen(null)}>All merchants</button>
         ) : (
-          <button type="button" className="btn !rounded-xl" onClick={() => setOpen('new')}>Add merchant</button>
+          <button type="button" className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-semibold" onClick={() => setOpen('new')}>Add merchant</button>
         )}
       </div>
-      {!open && <MerchantTable rows={rows} loading={list.isLoading} onEdit={setOpen} />}
+
+      {!open && (
+        <>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Stat label="Pay-in wallets" value={inr(sum('payinPaise'))} tone="bg-[#fdf0ea]" />
+            <Stat label="Payout wallets" value={inr(sum('payoutPaise'))} tone="bg-[#eaf7f0]" />
+            <Stat label="On hold" value={inr(sum('holdPaise'))} tone="bg-[#eef0f6]" />
+          </div>
+          {list.isLoading && <div className="h-28 rounded-[22px] bg-slate-200/50 animate-pulse" />}
+          {!list.isLoading && !rows.length && <div className={`${card} py-16 text-center text-[13px] text-slate-400`}>No merchants yet. Add the first one.</div>}
+          <div className="grid gap-3">
+            {rows.map((m: any, i: number) => (
+              <article key={m.id} className={`${card} p-4 flex flex-col lg:flex-row lg:items-center gap-4`}>
+                <div className="flex items-center gap-3 min-w-0 lg:w-[240px]">
+                  <span className="w-11 h-11 rounded-2xl text-white grid place-items-center text-[15px] font-extrabold shrink-0" style={{ background: avatars[i % avatars.length] }}>{(m.businessName || '?').charAt(0).toUpperCase()}</span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">{m.businessName || 'Unnamed'}</p>
+                    <p className="text-[12px] text-slate-400 truncate">{m.email || 'No email'}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 flex-1">
+                  <Mini k="Pay-in charge" v={`${m.payinChargePercent}%`} />
+                  <Mini k="Payout charge" v={`${m.payoutChargePercent}%`} />
+                  <Mini k="Pay-in wallet" v={inr(m.payinPaise)} />
+                  <Mini k="Payout wallet" v={inr(m.payoutPaise)} />
+                  <Mini k="Hold" v={inr(m.holdPaise)} />
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${m.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
+                  <button type="button" className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold" onClick={() => setOpen(m.id)}>Edit</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+
       {open === 'new' && <CreateMerchant onDone={id => { refresh(); setOpen(id); }} />}
       {current && <Editor key={current.id} merchant={current} onSaved={refresh} />}
     </div>
   );
 }
 
-function MerchantTable({ rows, loading, onEdit }: { rows: any[]; loading: boolean; onEdit: (id: string) => void }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-x-auto">
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="text-left text-slate-400 text-[11px] uppercase tracking-wide">
-            <th className="pl-5 py-3">Name</th><th>Email</th><th>Pay-in charge</th><th>Payout charge</th><th>Wallet hold</th><th>Active</th><th className="pr-5"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(m => (
-            <tr key={m.id} className="border-t border-slate-100">
-              <td className="pl-5 py-3 font-semibold text-slate-900">{m.businessName || 'Unnamed'}</td>
-              <td className="text-slate-500">{m.email || '—'}</td>
-              <td className="tnum">{m.payinChargePercent}%</td>
-              <td className="tnum">{m.payoutChargePercent}%</td>
-              <td className="tnum">{inr(m.holdPaise)}</td>
-              <td><Status s={m.active ? 'APPROVED' : 'SUSPENDED'} /></td>
-              <td className="pr-5 text-right"><button type="button" className="text-[12px] font-bold text-slate-700" onClick={() => onEdit(m.id)}>Edit</button></td>
-            </tr>
-          ))}
-          {!rows.length && <tr><td colSpan={7} className="px-5 py-8 text-slate-400">{loading ? 'Loading…' : 'No merchants yet.'}</td></tr>}
-        </tbody>
-      </table>
+    <div className={`${card} px-4 py-3`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-2 inline-block rounded-2xl px-3 py-1.5 text-[18px] font-black tnum text-slate-900 ${tone}`}>{value}</p>
     </div>
   );
+}
+
+function Mini({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2">
+      <p className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{k}</p>
+      <p className="text-[14px] font-bold tnum text-slate-900 mt-0.5">{v}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: any }) {
+  return <div><label className="label">{label}</label>{children}</div>;
 }
 
 function CreateMerchant({ onDone }: { onDone: (id: string) => void }) {
@@ -66,16 +100,27 @@ function CreateMerchant({ onDone }: { onDone: (id: string) => void }) {
     onError: (e: any) => setErr(e.message || 'Could not add merchant'),
   });
   return (
-    <form className="bg-white rounded-2xl border border-slate-200/80 p-4 grid md:grid-cols-4 gap-3 items-end" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-      <div><label className="label">Name</label><input className="input !rounded-xl" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></div>
-      <div><label className="label">Email</label><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-      <div><label className="label">API charge pay-in %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></div>
-      <div><label className="label">API charge payout %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></div>
-      <div><label className="label">Wallet hold ₹</label><input className="input !rounded-xl tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></div>
-      <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-700 mb-2"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
-      <button className="btn !rounded-xl md:col-span-2" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Create merchant'}</button>
-      {err && <p className="md:col-span-4 text-[12.5px] text-rose-600">{err}</p>}
+    <form className={`${card} p-5 space-y-4`} onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      <h2 className="font-bold text-slate-900">New merchant</h2>
+      <MerchantFields form={form} setForm={setForm} />
+      {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
+      <button className="h-10 px-5 rounded-xl bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Create merchant'}</button>
     </form>
+  );
+}
+
+function MerchantFields({ form, setForm }: { form: any; setForm: (v: any) => void }) {
+  return (
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <Field label="Name"><input className="input !rounded-xl" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></Field>
+      <Field label="Email"><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+      <Field label="API charge pay-in %"><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></Field>
+      <Field label="API charge payout %"><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></Field>
+      <Field label="Wallet hold ₹"><input className="input !rounded-xl tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></Field>
+      <div className="flex items-end pb-1">
+        <button type="button" onClick={() => setForm({ ...form, active: !form.active })} className={`h-11 px-4 rounded-xl text-[13px] font-bold ${form.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{form.active ? 'Active' : 'Inactive'}</button>
+      </div>
+    </div>
   );
 }
 
@@ -84,8 +129,10 @@ function Editor({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
     <div className="space-y-4">
       <ProfileBlock merchant={merchant} onSaved={onSaved} />
       <WalletBlock merchant={merchant} onSaved={onSaved} />
-      <ApiBlock merchantId={merchant.id} />
-      <MemberBlock merchantId={merchant.id} onChange={onSaved} />
+      <div className="grid xl:grid-cols-2 gap-4">
+        <ApiBlock merchantId={merchant.id} />
+        <MemberBlock merchantId={merchant.id} onChange={onSaved} />
+      </div>
     </div>
   );
 }
@@ -100,23 +147,22 @@ function ProfileBlock({ merchant, onSaved }: { merchant: any; onSaved: () => voi
     active: !!merchant.active,
   });
   const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
   const save = useMutation({
     mutationFn: () => api('/merchant-desk/' + merchant.id + '/profile', { method: 'POST', body: form }),
-    onSuccess: () => { setErr(''); onSaved(); },
+    onSuccess: () => { setErr(''); setOk('Saved'); onSaved(); setTimeout(() => setOk(''), 1600); },
     onError: (e: any) => setErr(e.message || 'Could not save'),
   });
   return (
-    <form className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-      <h2 className="font-bold text-slate-900">Merchant</h2>
-      <div className="grid md:grid-cols-3 gap-3">
-        <div><label className="label">Name</label><input className="input !rounded-xl" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></div>
-        <div><label className="label">Email</label><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-        <div><label className="label">Wallet hold ₹</label><input className="input !rounded-xl tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></div>
-        <div><label className="label">API charge pay-in %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></div>
-        <div><label className="label">API charge payout %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></div>
-        <label className="flex items-center gap-2 text-[13px] font-semibold mt-6"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
-        <button className="btn !rounded-xl" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
+    <form className={`${card} p-5 space-y-4`} onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-bold text-slate-900">Details</h2>
+        <div className="flex items-center gap-3">
+          {ok && <span className="text-[12px] font-semibold text-emerald-700">{ok}</span>}
+          <button className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
+        </div>
       </div>
+      <MerchantFields form={form} setForm={setForm} />
       {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
     </form>
   );
@@ -131,27 +177,26 @@ function WalletBlock({ merchant, onSaved }: { merchant: any; onSaved: () => void
     onError: (e: any) => setErr(e.message || 'Could not move amount'),
   });
   const cards = [
-    ['Pay-in wallet', inr(merchant.payinPaise), 'Collected, after fee'],
-    ['Payout wallet', inr(merchant.payoutPaise), 'Ready to pay out'],
-    ['On hold', inr(merchant.holdPaise), 'Stays in pay-in'],
-    ['Free to move', inr(merchant.freePayinPaise), 'Pay-in minus hold'],
+    ['Pay-in wallet', inr(merchant.payinPaise), 'bg-[#fdf0ea]'],
+    ['Payout wallet', inr(merchant.payoutPaise), 'bg-[#eaf7f0]'],
+    ['On hold', inr(merchant.holdPaise), 'bg-[#eef0f6]'],
+    ['Free to move', inr(merchant.freePayinPaise), 'bg-white'],
   ];
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-4">
+    <section className={`${card} p-5 space-y-4`}>
       <h2 className="font-bold text-slate-900">Wallet</h2>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {cards.map(([label, value, sub]) => (
-          <div key={label} className="rounded-2xl bg-[#f7f8fa] px-4 py-3">
+        {cards.map(([label, value, tone]) => (
+          <div key={label} className={`rounded-2xl border border-slate-100 px-4 py-3 ${tone}`}>
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="text-[18px] font-black tnum text-slate-900 mt-1">{value}</p>
-            <p className="text-[11.5px] text-slate-400">{sub}</p>
+            <p className="text-[20px] font-black tnum text-slate-900 mt-1">{value}</p>
           </div>
         ))}
       </div>
       <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); moveAmt.mutate(); }}>
-          <div><label className="label">Move amount (₹)</label><input className="input !rounded-xl tnum w-36" type="number" min={0} step="0.01" value={move.amountRupees} onChange={e => setMove({ ...move, amountRupees: e.target.value })} required /></div>
-          <div><label className="label">Direction</label><select className="input !rounded-xl" value={move.direction} onChange={e => setMove({ ...move, direction: e.target.value })}><option value="TO_PAYOUT">Pay-in → Payout</option><option value="TO_PAYIN">Payout → Pay-in</option></select></div>
-          <button className="btn !rounded-xl" disabled={moveAmt.isPending}>{moveAmt.isPending ? 'Moving…' : 'Move'}</button>
+        <Field label="Amount ₹"><input className="input !rounded-xl tnum w-36" type="number" min={0} step="0.01" value={move.amountRupees} onChange={e => setMove({ ...move, amountRupees: e.target.value })} required /></Field>
+        <Field label="Move"><select className="input !rounded-xl" value={move.direction} onChange={e => setMove({ ...move, direction: e.target.value })}><option value="TO_PAYOUT">Pay-in → Payout</option><option value="TO_PAYIN">Payout → Pay-in</option></select></Field>
+        <button className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60" disabled={moveAmt.isPending}>{moveAmt.isPending ? 'Moving…' : 'Move'}</button>
       </form>
       {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
     </section>
@@ -174,32 +219,30 @@ function MemberBlock({ merchantId, onChange }: { merchantId: string; onChange: (
   });
   const rows = (Array.isArray(q.data) ? q.data : []).filter((m: any) => m.merchantId === merchantId);
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3">
-      <h2 className="font-bold text-slate-900">Members</h2>
-      <p className="text-[12.5px] text-slate-500">Pay-in and payout use this member id. A transaction cannot be created without one.</p>
-      <form className="grid md:grid-cols-4 gap-3 items-end" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-        <div><label className="label">Name</label><input className="input !rounded-xl" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
-        <div><label className="label">Mobile</label><input className="input !rounded-xl tnum" inputMode="numeric" maxLength={10} value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} required /></div>
-        <div><label className="label">Email</label><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-        <button className="btn !rounded-xl" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Add member'}</button>
-        {err && <p className="md:col-span-4 text-[12.5px] text-rose-600">{err}</p>}
+    <section className={`${card} p-5 space-y-3`}>
+      <div>
+        <h2 className="font-bold text-slate-900">Members</h2>
+        <p className="text-[12.5px] text-slate-400 mt-0.5">A pay-in or payout needs one of these member ids.</p>
+      </div>
+      <form className="grid sm:grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+        <input className="input !rounded-xl" placeholder="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+        <input className="input !rounded-xl tnum" placeholder="Mobile" inputMode="numeric" maxLength={10} value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} required />
+        <input className="input !rounded-xl sm:col-span-2" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+        <button className="h-10 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold sm:col-span-2 disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Add member'}</button>
+        {err && <p className="sm:col-span-2 text-[12.5px] text-rose-600">{err}</p>}
       </form>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead><tr className="text-left text-slate-400 text-[11px] uppercase tracking-wide"><th className="py-2">Name</th><th>Mobile</th><th>Member id</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((m: any) => (
-              <tr key={m.id} className="border-t border-slate-100">
-                <td className="py-2.5 font-semibold">{m.name}</td>
-                <td className="tnum">{m.mobile}</td>
-                <td className="font-mono text-[11px] text-slate-500">{m.id}</td>
-                <td>{m.status}</td>
-                <td className="text-right"><button type="button" className={`text-[12px] font-bold ${m.status === 'ACTIVE' ? 'text-rose-600' : 'text-emerald-700'}`} onClick={() => toggle.mutate(m)}>{m.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button></td>
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={5} className="py-6 text-slate-400">{q.isLoading ? 'Loading…' : 'No members for this merchant.'}</td></tr>}
-          </tbody>
-        </table>
+      <div className="space-y-2">
+        {rows.map((m: any) => (
+          <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-[#f7f8fa] px-3 py-2.5">
+            <span className="w-8 h-8 rounded-xl bg-slate-900 text-white grid place-items-center text-[12px] font-bold shrink-0">{m.name.charAt(0).toUpperCase()}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-slate-900 truncate">{m.name}</p>
+              <p className="text-[11px] text-slate-400 truncate">{m.mobile}{m.email ? ' · ' + m.email : ''}</p>
+            </div>
+            <button type="button" disabled={toggle.isPending} onClick={() => toggle.mutate(m)} className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${m.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>{m.status === 'ACTIVE' ? 'Active' : 'Inactive'}</button>
+          </div>
+        ))}
+        {!rows.length && <p className="text-[12.5px] text-slate-400 py-4 text-center">{q.isLoading ? 'Loading…' : 'No members yet.'}</p>}
       </div>
     </section>
   );
@@ -215,20 +258,22 @@ function ApiBlock({ merchantId }: { merchantId: string }) {
   const data = q.data || { providers: [], rules: [], mode: 'platform' };
   const on = (productCode: string, providerId: string) => !!(data.rules || []).find((r: any) => r.productCode === productCode && r.providerId === providerId && r.isActive);
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3">
-      <h2 className="font-bold text-slate-900">APIs for this merchant</h2>
-      <p className="text-[12.5px] text-slate-500">{data.mode === 'merchant' ? 'Only the APIs switched on here are used for this merchant.' : 'Nothing is assigned yet. The platform API switch is used until you turn one on or off here.'}</p>
-      <div className="grid md:grid-cols-2 gap-4">
+    <section className={`${card} p-5 space-y-3`}>
+      <div>
+        <h2 className="font-bold text-slate-900">APIs</h2>
+        <p className="text-[12.5px] text-slate-400 mt-0.5">{data.mode === 'merchant' ? 'Only the ones switched on here are used.' : 'Platform switch is used until you set one here.'}</p>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
         {(['PAYIN', 'PAYOUT'] as const).map(pc => (
           <div key={pc}>
-            <p className="text-[12px] font-bold uppercase tracking-wide text-slate-400 mb-2">{pc === 'PAYIN' ? 'Pay-in' : 'Payout'}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">{pc === 'PAYIN' ? 'Pay-in' : 'Payout'}</p>
             {(data.providers || []).map((p: any) => {
               const active = on(pc, p.id);
               return (
-                <div key={p.id + pc} className="flex items-center justify-between border border-slate-100 rounded-xl px-3 py-2 mb-2">
-                  <span className="text-[13px] font-semibold">{p.name}</span>
-                  <button type="button" disabled={set.isPending} onClick={() => set.mutate({ productCode: pc, providerId: p.id, active: !active })} className={`rounded-full px-3 py-1 text-[11.5px] font-bold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{active ? 'On' : 'Off'}</button>
-                </div>
+                <button key={p.id + pc} type="button" disabled={set.isPending} onClick={() => set.mutate({ productCode: pc, providerId: p.id, active: !active })} className="w-full flex items-center justify-between rounded-2xl bg-[#f7f8fa] px-3 py-2.5 mb-2 text-left">
+                  <span className="text-[13px] font-semibold text-slate-900 truncate">{String(p.name || '').split(' (')[0]}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-white text-slate-400'}`}>{active ? 'On' : 'Off'}</span>
+                </button>
               );
             })}
             {!data.providers?.length && <p className="text-[12.5px] text-slate-400">No API connected.</p>}
