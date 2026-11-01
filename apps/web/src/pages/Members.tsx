@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, inr } from '../api';
 
@@ -13,58 +13,41 @@ export function MerchantDesk() {
   const current = rows.find((m: any) => m.id === open);
   const refresh = () => qc.invalidateQueries({ queryKey: ['merchant-desk'] });
   const sum = (k: string) => rows.reduce((a: number, m: any) => a + Number(m[k] || 0), 0);
+  useEffect(() => { if (!open && rows[0]?.id) setOpen(rows[0].id); }, [rows, open]);
   return (
-    <div className="space-y-5 w-full">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-black tracking-tight text-slate-900">Merchant</h1>
-          <p className="text-[13px] text-slate-500 mt-1">{rows.length} merchant{rows.length === 1 ? '' : 's'} · charges, wallet hold, and members</p>
-        </div>
-        {open ? (
-          <button type="button" className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-700" onClick={() => setOpen(null)}>All merchants</button>
-        ) : (
-          <button type="button" className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-semibold" onClick={() => setOpen('new')}>Add merchant</button>
-        )}
+    <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-3">
+      <div className="shrink-0 grid sm:grid-cols-3 gap-3">
+        <Stat label="Pay-in wallets" value={inr(sum('payinPaise'))} tone="bg-[#fdf0ea]" />
+        <Stat label="Payout wallets" value={inr(sum('payoutPaise'))} tone="bg-[#eaf7f0]" />
+        <Stat label="On hold" value={inr(sum('holdPaise'))} tone="bg-[#eef0f6]" />
       </div>
-
-      {!open && (
-        <>
-          <div className="grid sm:grid-cols-3 gap-3">
-            <Stat label="Pay-in wallets" value={inr(sum('payinPaise'))} tone="bg-[#fdf0ea]" />
-            <Stat label="Payout wallets" value={inr(sum('payoutPaise'))} tone="bg-[#eaf7f0]" />
-            <Stat label="On hold" value={inr(sum('holdPaise'))} tone="bg-[#eef0f6]" />
+      <div className="flex-1 min-h-0 grid lg:grid-cols-[300px_minmax(0,1fr)] gap-3">
+        <aside className={`${card} min-h-0 flex flex-col overflow-hidden`}>
+          <div className="shrink-0 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+            <p className="text-[13px] font-bold text-slate-900">Merchants</p>
+            <button type="button" className="h-8 px-3 rounded-full bg-slate-900 text-white text-[12px] font-semibold" onClick={() => setOpen('new')}>Add</button>
           </div>
-          {list.isLoading && <div className="h-28 rounded-[22px] bg-slate-200/50 animate-pulse" />}
-          {!list.isLoading && !rows.length && <div className={`${card} py-16 text-center text-[13px] text-slate-400`}>No merchants yet. Add the first one.</div>}
-          <div className="grid gap-3">
+          <div className="flex-1 min-h-0 overflow-auto">
+            {list.isLoading && <p className="px-4 py-6 text-[13px] text-slate-400">Loading…</p>}
+            {!list.isLoading && !rows.length && <p className="px-4 py-6 text-[13px] text-slate-400">No merchants yet.</p>}
             {rows.map((m: any, i: number) => (
-              <article key={m.id} className={`${card} p-4 flex flex-col lg:flex-row lg:items-center gap-4`}>
-                <div className="flex items-center gap-3 min-w-0 lg:w-[240px]">
-                  <span className="w-11 h-11 rounded-2xl text-white grid place-items-center text-[15px] font-extrabold shrink-0" style={{ background: avatars[i % avatars.length] }}>{(m.businessName || '?').charAt(0).toUpperCase()}</span>
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 truncate">{m.businessName || 'Unnamed'}</p>
-                    <p className="text-[12px] text-slate-400 truncate">{m.email || 'No email'}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 flex-1">
-                  <Mini k="Pay-in charge" v={`${m.payinChargePercent}%`} />
-                  <Mini k="Payout charge" v={`${m.payoutChargePercent}%`} />
-                  <Mini k="Pay-in wallet" v={inr(m.payinPaise)} />
-                  <Mini k="Payout wallet" v={inr(m.payoutPaise)} />
-                  <Mini k="Hold" v={inr(m.holdPaise)} />
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${m.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{m.active ? 'Active' : 'Inactive'}</span>
-                  <button type="button" className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold" onClick={() => setOpen(m.id)}>Edit</button>
-                </div>
-              </article>
+              <button key={m.id} type="button" onClick={() => setOpen(m.id)} className={`w-full text-left px-4 py-3 border-b border-slate-50 flex items-center gap-3 ${open === m.id ? 'bg-[#f7f8fa]' : 'hover:bg-[#fafbfd]'}`}>
+                <span className="w-9 h-9 rounded-xl text-white grid place-items-center text-[13px] font-extrabold shrink-0" style={{ background: avatars[i % avatars.length] }}>{(m.businessName || '?').charAt(0).toUpperCase()}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-semibold text-slate-900 truncate">{m.businessName || 'Unnamed'}</span>
+                  <span className="block text-[11.5px] text-slate-400 truncate">{m.email || 'No email'}</span>
+                </span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${m.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+              </button>
             ))}
           </div>
-        </>
-      )}
-
-      {open === 'new' && <CreateMerchant onDone={id => { refresh(); setOpen(id); }} />}
-      {current && <Editor key={current.id} merchant={current} onSaved={refresh} />}
+        </aside>
+        <section className="min-h-0 overflow-auto pr-0.5">
+          {open === 'new' && <CreateMerchant onDone={id => { refresh(); setOpen(id); }} />}
+          {current && <Editor key={current.id} merchant={current} onSaved={refresh} />}
+          {!open && !list.isLoading && <div className={`${card} h-full grid place-items-center text-[13px] text-slate-400`}>Select a merchant</div>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -74,15 +57,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
     <div className={`${card} px-4 py-3`}>
       <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
       <p className={`mt-2 inline-block rounded-2xl px-3 py-1.5 text-[18px] font-black tnum text-slate-900 ${tone}`}>{value}</p>
-    </div>
-  );
-}
-
-function Mini({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2">
-      <p className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">{k}</p>
-      <p className="text-[14px] font-bold tnum text-slate-900 mt-0.5">{v}</p>
     </div>
   );
 }
