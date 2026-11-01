@@ -150,6 +150,7 @@ model MerchantProfile {
   pricing                    PricingPlan[]
   invoices                   Invoice[]
   usage                      UsageRecord[]
+  members                    PortalMember[]
   createdAt                  DateTime            @default(now())
   updatedAt                  DateTime            @updatedAt
 
@@ -426,6 +427,8 @@ model Transaction {
   providerRef   String?
   utr           String?
   providerId    String?
+  memberId      String?
+  member        PortalMember?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
   customer      Json?
   metadata      Json?
   failureReason String?
@@ -437,7 +440,24 @@ model Transaction {
 
   @@unique([merchantId, env, merchantRef])
   @@index([merchantId, env, kind, status])
+  @@index([memberId])
   @@index([createdAt])
+}
+
+model PortalMember {
+  id           String          @id @default(cuid())
+  merchantId   String
+  merchant     MerchantProfile @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name         String
+  mobile       String
+  email        String?
+  status       String          @default("ACTIVE")
+  transactions Transaction[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([merchantId, mobile])
+  @@index([merchantId])
 }
 
 model TransactionAttempt {

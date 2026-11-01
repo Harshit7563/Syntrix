@@ -29,10 +29,12 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   const r=await this.p.transaction.findMany({where:{...(q.merchantId?{merchantId:q.merchantId}:{}),...(q.kind?{kind:q.kind}:{}),...(q.status?{status:q.status}:{}),...(q.providerId?{providerId:q.providerId}:{}),...(q.q?{merchantRef:{contains:q.q}}:{})},orderBy:{createdAt:'desc'},take:500});
   const pids=[...new Set(r.map(t=>t.providerId).filter(Boolean))] as string[];
   const mids=[...new Set(r.map(t=>t.merchantId).filter(Boolean))] as string[];
+  const memberIds=[...new Set(r.map(t=>t.memberId).filter(Boolean))] as string[];
   const provs=pids.length?await this.p.provider.findMany({where:{id:{in:pids}},select:{id:true,name:true,code:true,isMock:true}}):[];
   const merchs=mids.length?await this.p.merchantProfile.findMany({where:{id:{in:mids}},select:{id:true,businessName:true}}):[];
-  const pmap=new Map(provs.map(p=>[p.id,p])); const mmap=new Map(merchs.map(m=>[m.id,m]));
-  return r.map(t=>{ const pv:any=t.providerId?pmap.get(t.providerId):null; const m:any=mmap.get(t.merchantId); return {...t,amountPaise:Number(t.amountPaise),feePaise:Number(t.feePaise),apiName:pv?.name||'Unknown API',apiCode:pv?.code||'—',apiIsMock:!!pv?.isMock,memberName:m?.businessName||'—'}; });
+  const members=memberIds.length?await this.p.portalMember.findMany({where:{id:{in:memberIds}},select:{id:true,name:true}}):[];
+  const pmap=new Map(provs.map(p=>[p.id,p])); const mmap=new Map(merchs.map(m=>[m.id,m])); const memMap=new Map(members.map(m=>[m.id,m.name]));
+  return r.map(t=>{ const pv:any=t.providerId?pmap.get(t.providerId):null; const m:any=mmap.get(t.merchantId); return {...t,amountPaise:Number(t.amountPaise),feePaise:Number(t.feePaise),apiName:pv?.name||'Unknown API',apiCode:pv?.code||'—',apiIsMock:!!pv?.isMock,memberName:(t.memberId&&memMap.get(t.memberId))||m?.businessName||'—'}; });
  }
  @Get('audit') @Perm('audit:read') async auditLogs(){ return this.p.auditLog.findMany({orderBy:{createdAt:'desc'},take:200}); }
  /** API-wise request / response logs (provider attempts + txn payload). */
@@ -160,8 +162,8 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards, BadRequestExcepti
   const idem='admin-test-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);
   const merchantRef=(kind==='PAYIN'?'admin_pi_':'admin_po_')+Date.now();
   const request=kind==='PAYIN'
-    ?{merchantRef,amountPaise,amountRupees,customer:{name:String(b.customerName).trim(),email:String(b.email).trim(),mobile},method:'UPI'}
-    :{merchantRef,amountPaise,amountRupees,beneficiary:{name:String(b.name).trim(),account:String(b.account),ifsc:String(b.ifsc).toUpperCase(),mobile,email:String(b.email||'').trim()},method:'IMPS'};
+    ?{merchantRef,amountPaise,amountRupees,memberId:b.memberId||null,customer:{name:String(b.customerName).trim(),email:String(b.email).trim(),mobile},method:'UPI'}
+    :{merchantRef,amountPaise,amountRupees,memberId:b.memberId||null,beneficiary:{name:String(b.name).trim(),account:String(b.account),ifsc:String(b.ifsc).toUpperCase(),mobile,email:String(b.email||'').trim()},method:'IMPS'};
   const started=Date.now();
   let response:any; let error:string|null=null;
   try{

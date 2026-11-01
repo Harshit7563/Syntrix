@@ -8,6 +8,14 @@ import { TxnEventsService } from './txn-events.service';
 @Injectable() export class PaymentsService {
   constructor(private p: PrismaService, private ledger: LedgerService, private live: TxnEventsService) {}
 
+  private async memberFor(merchantId: string, memberId?: string) {
+    const id = String(memberId || '').trim();
+    if (!id) return undefined;
+    const m = await this.p.portalMember.findFirst({ where: { id, merchantId, status: 'ACTIVE' } });
+    if (!m) throw new BadRequestException('Choose an active member');
+    return m.id;
+  }
+
   /** Push txn snapshot to mobile / live SSE subscribers. */
   async publishLive(t: any) {
     if (!t?.id) return;
@@ -180,6 +188,7 @@ import { TxnEventsService } from './txn-events.service';
     if (!(await hasCapability(this.p, provider.id, 'createPayin', 'PAYIN')) && !provider.isMock) {
       throw new BadRequestException('Routed provider does not support createPayin (capabilities matrix)');
     }
+    const memberId = await this.memberFor(merchant.id, body.memberId);
     let txn: any;
     try {
       txn = await this.p.transaction.create({
@@ -190,6 +199,7 @@ import { TxnEventsService } from './txn-events.service';
           merchantRef: body.merchantRef,
           amountPaise: BigInt(amount),
           providerId: provider.id,
+          memberId,
           customer: body.customer,
           metadata: { ...(body.metadata || {}), method: body.method || body.customer?.method || 'API' },
           status: 'PROCESSING',
@@ -314,6 +324,7 @@ import { TxnEventsService } from './txn-events.service';
       if (prior.requestHash !== reqHash) throw new ConflictException('Idempotency-Key reused with a different payload');
       return prior.response;
     }
+    const linkedMemberId = await this.memberFor(merchant.id, body.memberId);
     const product = await this.checkAccess(merchant.id, env, 'PAYOUT');
     const price = await this.pricing(merchant.id, product.id);
     const fee = feePaise(amount, price?.feeBps || 0, Number(price?.feeFlatPaise || 0));
@@ -376,6 +387,7 @@ import { TxnEventsService } from './txn-events.service';
               amountPaise: BigInt(amount),
               feePaise: BigInt(fee),
               providerId: provider.id,
+              memberId: linkedMemberId,
               customer: body.beneficiary,
               metadata: {
                 method: mode,

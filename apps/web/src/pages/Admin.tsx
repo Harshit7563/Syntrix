@@ -638,7 +638,7 @@ export function AdminTxns({kind}:{kind?:string}={}){
                 );
                 if(tableKind==='PAYIN') return (
                   <tr key={t.id} className="border-b border-slate-50 last:border-0 hover:bg-[#fafbfd] transition cursor-pointer" onClick={()=>setSel(t)}>
-                    <td className="pl-5 py-3.5 pr-3 font-semibold text-slate-900 whitespace-nowrap">Trust Setu</td>
+                    <td className="pl-5 py-3.5 pr-3 font-semibold text-slate-900 whitespace-nowrap">{t.memberName||'—'}</td>
                     <td className={`py-3.5 pr-3 font-semibold tnum whitespace-nowrap ${amt.cls}`}>{amt.txt}</td>
                     <td className="py-3.5 pr-3 min-w-0">
                       {custLine?(
@@ -1030,7 +1030,8 @@ export function AdminTestApi(){
   const qc=useQueryClient();
   const [bucket,setBucket]=useState('ALL');
   const hist=useQuery({queryKey:['testapihist',bucket],queryFn:()=>api('/admin/test-api/history?bucket='+bucket),refetchInterval:12000,retry:false});
-  const [tc,setTc]=useState<any>({providerId:'',kind:'PAYIN',amountRupees:'100',customerName:'Test Customer',email:'test@gmail.com',mobile:'9876543210',account:'1234567890',ifsc:'HDFC0000001',name:'Test Beneficiary'});
+  const [tc,setTc]=useState<any>({providerId:'',kind:'PAYIN',amountRupees:'100',memberId:'',customerName:'Test Customer',email:'test@gmail.com',mobile:'9876543210',account:'1234567890',ifsc:'HDFC0000001',name:'Test Beneficiary'});
+  const memberList=useQuery({queryKey:['portal-members'],queryFn:()=>api('/members')});
   const [busy,setBusy]=useState(false);
   const [out,setOut]=useState<any>(null);
   const [copied,setCopied]=useState(false);
@@ -1054,7 +1055,7 @@ export function AdminTestApi(){
     setCopied(true); setTimeout(()=>setCopied(false),1500);
   };
   const activeProviders=(providers||[]).filter((p:any)=>p.isActive!==false);
-  const run=async()=>{ const pid=tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
+  const run=async()=>{ const pid=tc.providerId||activeProviders.find((p:any)=>p.code==='BAWJI')?.id||activeProviders[0]?.id; if(!pid) return setOut({ok:false,error:'Select an API'}); setBusy(true); setOut({note:'Calling…'}); try{ const r=await api('/admin/test-api',{method:'POST',body:{providerId:pid,kind:tc.kind,amountRupees:Number(tc.amountRupees),memberId:tc.memberId||undefined,customerName:tc.customerName,email:tc.email,mobile:tc.mobile,account:tc.account,ifsc:tc.ifsc,name:tc.name}}); setOut(r); qc.invalidateQueries({queryKey:['testapihist']}); qc.invalidateQueries({queryKey:['adpstatsPAYIN']}); qc.invalidateQueries({queryKey:['adpstatsPAYOUT']}); }catch(e:any){ setOut({ok:false,error:e.message}); qc.invalidateQueries({queryKey:['testapihist']}); } setBusy(false); };
   const counts=hist.data?.counts||{ALL:0,SUCCESS:0,PENDING:0,FAILED:0};
   const items:any[]=hist.data?.items||[];
   const bucketCls:any={SUCCESS:'bg-emerald-50 text-emerald-700',PENDING:'bg-amber-50 text-amber-700',FAILED:'bg-rose-50 text-rose-700'};
@@ -1088,6 +1089,17 @@ export function AdminTestApi(){
           <label className="label">Amount (₹)</label>
           <input className="input !rounded-xl tnum" type="number" min={1} step="0.01" value={tc.amountRupees} onChange={e=>setTc({...tc,amountRupees:e.target.value})}/>
         </div>
+      </div>
+      <div>
+        <label className="label">Member</label>
+        <select className="input !rounded-xl" value={tc.memberId||''} onChange={e=>{
+          const id=e.target.value;
+          const m=(Array.isArray(memberList.data)?memberList.data:[]).find((x:any)=>x.id===id);
+          setTc({...tc,memberId:id,customerName:m?.name||tc.customerName,mobile:m?.mobile||tc.mobile,email:m?.email||tc.email,name:m?.name||tc.name});
+        }}>
+          <option value="">No member</option>
+          {(Array.isArray(memberList.data)?memberList.data:[]).filter((m:any)=>m.status==='ACTIVE').map((m:any)=><option key={m.id} value={m.id}>{m.name} · {m.mobile}</option>)}
+        </select>
       </div>
       {tc.kind==='PAYIN'&&(
         <div className="grid md:grid-cols-3 gap-3">

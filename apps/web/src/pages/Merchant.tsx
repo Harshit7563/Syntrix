@@ -153,7 +153,7 @@ export function Transactions({kind}:{kind?:string}={}){ const {data,isLoading,er
     </tr>; }
     if(rowKind==='PAYIN'){ const st=t.status==='SUCCESS'?'Success':t.status==='FAILED'?'Failed':'Pending'; const stCls=st==='Success'?'bg-emerald-50 text-emerald-700':st==='Failed'?'bg-rose-50 text-rose-600':'bg-amber-50 text-amber-700';
     return <tr key={t.id} onClick={()=>setSel(t)} className="border-b border-slate-50 last:border-0 hover:bg-[#f6f8ff] transition cursor-pointer">
-      <td className="py-3 px-3 whitespace-nowrap font-semibold text-slate-900">Trust Setu</td>
+      <td className="py-3 px-3 whitespace-nowrap font-semibold text-slate-900">{t.member?.name||t.memberName||'—'}</td>
       <td className="py-3 px-3 whitespace-nowrap"><span className="font-display font-bold text-[14px] text-slate-800 tnum">{inr(t.amountPaise)}</span></td>
       <td className="py-3 px-3 whitespace-nowrap">{nm?<span><span className="block font-semibold text-slate-900 leading-tight">{nm}</span><span className="block text-[11px] text-slate-400">{c.email||c.phone||''}</span></span>:<span className="text-slate-300 text-[12px]">—</span>}</td>
       <td className="py-3 px-3 whitespace-nowrap font-mono text-[12px] font-semibold text-slate-900" title={t.id}>{t.id.slice(0,10)}…{t.id.slice(-4)}</td>

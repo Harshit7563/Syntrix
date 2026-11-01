@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {Login} from './pages/Auth';import {BawjiPay} from './pages/BawjiPay';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground} from './pages/Merchant';import {AdminDashboard,AdminMerchants,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs} from './pages/Admin';import {Settings} from './pages/Settings';
+import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {Login} from './pages/Auth';import {BawjiPay} from './pages/BawjiPay';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground} from './pages/Merchant';import {AdminDashboard,AdminMerchants,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs} from './pages/Admin';import {Members} from './pages/Members';import {Settings} from './pages/Settings';
 
 const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']);
 const isStaff=(role?:string)=>!!role&&STAFF.has(role);
@@ -36,6 +36,7 @@ function Shell(){
     ['/app/providers','APIs',I.shield],
     ['/app/logs','Logs',I.doc],
     ['/app/merchants','Merchants',I.users],
+    ['/app/members','Members',I.users],
     ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
   ]:[
@@ -59,6 +60,7 @@ function Shell(){
     ['/app/reports','Reports'],
     ['/app/providers','APIs'],
     ['/app/logs','Logs'],
+    ['/app/members','Members'],
   ]:[
     ['/app','Dashboard'],
     ['/app/pay-in','Collection'],
@@ -132,6 +134,7 @@ function Shell(){
             <Route path="logs" element={<AdminApiLogs/>}/>
             <Route path="test-api" element={<AdminTestApi/>}/>
             <Route path="merchants" element={<AdminMerchants/>}/>
+            <Route path="members" element={<Members/>}/>
             <Route path="approvals" element={<AdminApprovals/>}/>
             <Route path="reconciliation" element={<AdminRecon/>}/>
             <Route path="audit" element={<AdminAudit/>}/>
