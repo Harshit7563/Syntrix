@@ -160,7 +160,7 @@ function ApiSwitch(){
   const liveProv=(pc:'PAYIN'|'PAYOUT')=>providers.find((x:any)=>x.id===liveId(pc));
   const Setup=({pc}:{pc:'PAYIN'|'PAYOUT'})=>{
     const p=liveProv(pc); const r=p?routeFor(p.id,pc):null; const on=!!r?.isActive; const circ=!!p?.circuitOpen;
-    const rg=p?getRange(p.id,pc):{min:'',max:''}; const dirty=!!(p&&draft[draftKey(p.id,pc)]);
+    const rg=p?getRange(p.id,pc):{min:'',max:''};
     const charge=fee(pc==='PAYIN'?'payinChargePercent':'payoutChargePercent');
     const balance=inr(book(pc==='PAYIN'?'payinPaise':'payoutPaise'));
     const status=circ?'Error':on?'Connected':'Not connected';
@@ -178,22 +178,24 @@ function ApiSwitch(){
         <span className={`inline-flex items-center gap-1.5 text-[12.5px] font-semibold shrink-0 ${statusCls}`}><span className={`w-1.5 h-1.5 rounded-full ${dot}`}/>{status}</span>
       </div>
       <p className="text-[13px] leading-relaxed text-slate-500 mt-3">Charge {charge}{charge==='—'?'':'%'} · Balance {balance}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <label className="block">
-          <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">From ₹</span>
-          <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 h-10 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="0" disabled={!p} value={rg.min} onChange={e=>p&&setRange(p.id,pc,{min:e.target.value})}/>
-        </label>
-        <label className="block">
-          <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">To ₹</span>
-          <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 h-10 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="No max" disabled={!p} value={rg.max} onChange={e=>p&&setRange(p.id,pc,{max:e.target.value})}/>
-        </label>
-      </div>
+      <form className="mt-3" onSubmit={e=>{ e.preventDefault(); if(p) saveRange(p.id,pc); }}>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">From ₹</span>
+            <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 h-10 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="0" disabled={!p} value={rg.min} onChange={e=>p&&setRange(p.id,pc,{min:e.target.value})}/>
+          </label>
+          <label className="block">
+            <span className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">To ₹</span>
+            <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#fafafa] px-3 h-10 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="No max" disabled={!p} value={rg.max} onChange={e=>p&&setRange(p.id,pc,{max:e.target.value})}/>
+          </label>
+        </div>
+        <button type="submit" disabled={!p||busy===`save-${p?.id}-${pc}`} className="mt-2 h-10 w-full rounded-xl bg-slate-900 text-white text-[13px] font-semibold hover:bg-black disabled:opacity-50">{busy===`save-${p?.id}-${pc}`?'Saving…':'Submit'}</button>
+      </form>
       <div className="mt-auto pt-4 flex items-center justify-between">
         <button type="button" disabled={!p||busy===`tog-${p?.id}-${pc}`} onClick={()=>p&&toggle(p.id,pc)} className={`relative w-11 h-6 rounded-full transition ${on?'bg-[#f5a623]':'bg-slate-200'} disabled:opacity-50`}>
           <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition ${on?'left-[22px]':'left-0.5'}`}/>
         </button>
         <div className="flex items-center gap-3">
-          {dirty&&<button type="button" disabled={busy===`save-${p.id}-${pc}`} onClick={()=>saveRange(p.id,pc)} className="h-8 px-3 rounded-full bg-slate-900 text-white text-[12px] font-semibold disabled:opacity-60">{busy===`save-${p.id}-${pc}`?'Saving…':'Save range'}</button>}
           <button type="button" disabled={!p} onClick={()=>{ if(!p) return; setSel(p.id); testConn(p.id); }} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-500 hover:text-slate-800 disabled:opacity-40">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12a9 9 0 1 1-2.2-5.8"/><path d="M21 3v6h-6"/></svg>
             Test Connection
