@@ -9,11 +9,13 @@ export function MerchantDesk() {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['merchant-desk'], queryFn: () => api('/merchant-desk') });
   const members = useQuery({ queryKey: ['portal-members'], queryFn: () => api('/members') });
+  const sw = useQuery({ queryKey: ['apiswitch'], queryFn: () => api('/admin/api-switch') });
   const [open, setOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('wallet');
   const [q, setQ] = useState('');
   const rows = Array.isArray(list.data) ? list.data : [];
   const current = rows.find((m: any) => m.id === open);
+  const apisQ = useQuery({ queryKey: ['merch-apis', current?.id || 'none'], queryFn: () => api('/merchant-desk/' + current.id + '/apis'), enabled: !!current?.id });
   const refresh = () => qc.invalidateQueries({ queryKey: ['merchant-desk'] });
   const sum = (k: string) => rows.reduce((a: number, m: any) => a + Number(m[k] || 0), 0);
   const needle = q.trim().toLowerCase();
@@ -24,17 +26,22 @@ export function MerchantDesk() {
   const focus = current;
   const payin = focus ? Number(focus.payinPaise || 0) : sum('payinPaise');
   const payout = focus ? Number(focus.payoutPaise || 0) : sum('payoutPaise');
-  const hold = focus ? Number(focus.holdPaise || 0) : sum('holdPaise');
-  const free = focus ? Number(focus.freePayinPaise || 0) : Math.max(0, sum('payinPaise') - sum('holdPaise'));
-  const who = focus ? (focus.businessName || 'Merchant') : 'All merchants';
+  const liveApi = (pc: 'PAYIN' | 'PAYOUT') => {
+    const providers = apisQ.data?.providers || [];
+    const rule = (apisQ.data?.rules || []).find((r: any) => r.productCode === pc && r.isActive);
+    const own = rule && providers.find((p: any) => p.id === rule.providerId);
+    if (own) return String(own.name || own.code).split(' (')[0];
+    const plat = sw.data?.active?.[pc]?.provider;
+    if (plat?.name) return String(plat.name).split(' (')[0];
+    if (providers[0]) return String(providers[0].name).split(' (')[0];
+    return 'No API';
+  };
 
   return (
     <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-3">
-      <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <Kpi tone="kpi-peach" label="Pay-in wallet" value={inr(payin)} hint={who} onClick={() => focus && setTab('wallet')} />
-        <Kpi tone="kpi-mint" label="Payout wallet" value={inr(payout)} hint={who} onClick={() => focus && setTab('wallet')} />
-        <Kpi tone="kpi-sky" label="On hold" value={inr(hold)} hint={who} onClick={() => focus && setTab('charges')} />
-        <Kpi tone="kpi-lilac" label="Free to move" value={inr(free)} hint={who} onClick={() => focus && setTab('wallet')} />
+      <div className="shrink-0 grid md:grid-cols-2 gap-3">
+        <AtmCard kind="PAYIN" apiName={liveApi('PAYIN')} charge={focus ? focus.payinChargePercent ?? 0 : '—'} balance={inr(payin)} onClick={() => focus && setTab('wallet')} />
+        <AtmCard kind="PAYOUT" apiName={liveApi('PAYOUT')} charge={focus ? focus.payoutChargePercent ?? 0 : '—'} balance={inr(payout)} onClick={() => focus && setTab('wallet')} />
       </div>
 
       <div className="flex-1 min-h-0 bg-white rounded-[16px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden flex">
@@ -85,12 +92,48 @@ export function MerchantDesk() {
   );
 }
 
-function Kpi({ tone, label, value, hint, onClick }: { tone: string; label: string; value: string; hint: string; onClick: () => void }) {
+function Chip() {
   return (
-    <button type="button" onClick={onClick} className={`${tone} text-left hover:scale-[1.01] transition`}>
-      <p className="text-[26px] font-bold tnum leading-none truncate">{value}</p>
-      <p className="text-[12.5px] font-semibold mt-3">{label}</p>
-      <p className="text-[11px] text-slate-500 truncate">{hint}</p>
+    <span className="relative block w-11 h-8 rounded-[6px] overflow-hidden shadow-inner" style={{ background: 'linear-gradient(135deg,#f8e7a2,#e0b43a 48%,#fff4c4)' }}>
+      <span className="absolute left-0 right-0 top-[38%] h-px bg-black/25" />
+      <span className="absolute left-0 right-0 top-[62%] h-px bg-black/20" />
+      <span className="absolute top-0 bottom-0 left-[32%] w-px bg-black/20" />
+      <span className="absolute top-0 bottom-0 left-[68%] w-px bg-black/15" />
+    </span>
+  );
+}
+
+function AtmCard({ kind, apiName, charge, balance, onClick }: { kind: 'PAYIN' | 'PAYOUT'; apiName: string; charge: string | number; balance: string; onClick: () => void }) {
+  const payin = kind === 'PAYIN';
+  return (
+    <button type="button" onClick={onClick} className="group relative w-full overflow-hidden rounded-[22px] text-left text-white shadow-[0_16px_36px_rgba(15,23,42,.22)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,.28)]" style={{ background: payin ? 'linear-gradient(128deg,#18181b 0%,#3f3f46 38%,#09090b 72%,#27272a 100%)' : 'linear-gradient(128deg,#052e24 0%,#0f766e 40%,#042f2e 74%,#134e4a 100%)', minHeight: 188 }}>
+      <span className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+      <span className="pointer-events-none absolute -left-8 bottom-0 h-24 w-40 rounded-full bg-white/5 blur-2xl" />
+      <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition duration-700 group-hover:translate-x-[420%] group-hover:opacity-100" />
+      <span className="relative flex min-h-[188px] flex-col p-5">
+        <span className="flex items-start justify-between">
+          <span>
+            <span className="block text-[10px] font-bold tracking-[.28em] text-white/45">SYNTRIX</span>
+            <span className="mt-1 block text-[15px] font-semibold">{payin ? 'Pay-in' : 'Payout'}</span>
+          </span>
+          <span className="flex items-center gap-3">
+            <Chip />
+            <svg className="h-6 w-6 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8.5 8.5a5 5 0 0 1 7 0"/><path d="M6 6a8.5 8.5 0 0 1 12 0"/><path d="M11 12.5h2"/></svg>
+          </span>
+        </span>
+        <span className="mt-6 block text-[30px] font-bold leading-none tracking-tight tnum">{balance}</span>
+        <span className="mt-1 block text-[11px] font-semibold tracking-wide text-white/45">Total balance</span>
+        <span className="mt-auto flex items-end justify-between gap-3 pt-4">
+          <span className="min-w-0">
+            <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">API</span>
+            <span className="block truncate text-[16px] font-bold">{apiName}</span>
+          </span>
+          <span className="text-right">
+            <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">CHARGE</span>
+            <span className="block text-[16px] font-bold tnum">{charge}{charge === '—' ? '' : '%'}</span>
+          </span>
+        </span>
+      </span>
     </button>
   );
 }
