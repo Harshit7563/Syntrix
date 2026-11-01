@@ -79,6 +79,46 @@ function StatBox({label,value,sub,accent}:{label:string,value:any,sub?:string,ac
 
 function StepHead({n,title,sub,color}:{n:number,title:string,sub:string,color:string}){ return <div className="flex items-center gap-3 mb-3"><span className={`w-7 h-7 rounded-full ${color} text-white flex items-center justify-center text-[13px] font-extrabold shrink-0 shadow-sm`}>{n}</span><div><h3 className="font-bold text-[15px] text-slate-900 leading-tight">{title}</h3><p className="text-xs text-slate-400">{sub}</p></div></div>; }
 
+function Chip(){
+  return <span className="relative block w-11 h-8 rounded-[6px] overflow-hidden shadow-inner" style={{background:'linear-gradient(135deg,#f8e7a2,#e0b43a 48%,#fff4c4)'}}>
+    <span className="absolute left-0 right-0 top-[38%] h-px bg-black/25"/>
+    <span className="absolute left-0 right-0 top-[62%] h-px bg-black/20"/>
+    <span className="absolute top-0 bottom-0 left-[32%] w-px bg-black/20"/>
+    <span className="absolute top-0 bottom-0 left-[68%] w-px bg-black/15"/>
+  </span>;
+}
+function AtmCard({kind,apiName,charge,balance,onClick}:{kind:'PAYIN'|'PAYOUT';apiName:string;charge:any;balance:string;onClick:()=>void}){
+  const payin=kind==='PAYIN';
+  return <button type="button" onClick={onClick} className="group relative w-full overflow-hidden rounded-[22px] text-left text-white shadow-[0_16px_36px_rgba(15,23,42,.22)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,.28)]" style={{background:payin?'linear-gradient(128deg,#18181b 0%,#3f3f46 38%,#09090b 72%,#27272a 100%)':'linear-gradient(128deg,#052e24 0%,#0f766e 40%,#042f2e 74%,#134e4a 100%)',minHeight:188}}>
+    <span className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl"/>
+    <span className="pointer-events-none absolute -left-8 bottom-0 h-24 w-40 rounded-full bg-white/5 blur-2xl"/>
+    <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 transition duration-700 group-hover:translate-x-[420%] group-hover:opacity-100"/>
+    <span className="relative flex min-h-[188px] flex-col p-5">
+      <span className="flex items-start justify-between">
+        <span>
+          <span className="block text-[10px] font-bold tracking-[.28em] text-white/45">SYNTRIX</span>
+          <span className="mt-1 block text-[15px] font-semibold">{payin?'Pay-in':'Payout'}</span>
+        </span>
+        <span className="flex items-center gap-3">
+          <Chip/>
+          <svg className="h-6 w-6 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8.5 8.5a5 5 0 0 1 7 0"/><path d="M6 6a8.5 8.5 0 0 1 12 0"/><path d="M11 12.5h2"/></svg>
+        </span>
+      </span>
+      <span className="mt-6 block text-[30px] font-bold leading-none tracking-tight tnum">{balance}</span>
+      <span className="mt-1 block text-[11px] font-semibold tracking-wide text-white/45">Total balance</span>
+      <span className="mt-auto flex items-end justify-between gap-3 pt-4">
+        <span className="min-w-0">
+          <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">API</span>
+          <span className="block truncate text-[16px] font-bold">{apiName}</span>
+        </span>
+        <span className="text-right">
+          <span className="block text-[10px] font-bold tracking-[.18em] text-white/40">CHARGE</span>
+          <span className="block text-[16px] font-bold tnum">{charge}{charge==='—'?'':'%'}</span>
+        </span>
+      </span>
+    </span>
+  </button>;
+}
 function ApiSwitch(){
   const {data,refetch}=useQ('apiswitch','/admin/api-switch');
   const payin=useQ('adpstatsPAYIN','/admin/provider-stats?kind=PAYIN');
@@ -94,6 +134,7 @@ function ApiSwitch(){
   const [keysOpen,setKeysOpen]=useState(false);
   const [testNote,setTestNote]=useState<any>(null);
   const provsQ=useQ('aprov','/admin/providers');
+  const merchants=useQ('merchant-desk','/merchant-desk');
   if(!data) return <div className="grid md:grid-cols-2 gap-3">{[1,2].map(i=><div key={i} className="h-48 rounded-[22px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   const flash=(t:string)=>{ setMsg(t); setTimeout(()=>setMsg(''),2800); };
@@ -181,12 +222,14 @@ function ApiSwitch(){
     </div>;
   };
 
+  const books=Array.isArray(merchants.data)?merchants.data:[];
+  const book=(k:string)=>books.reduce((a:number,m:any)=>a+Number(m[k]||0),0);
+  const fee=(k:string)=>{ const vals=[...new Set(books.map((m:any)=>m[k]).filter((v:any)=>v!=null&&v!==''))]; return vals.length===1?vals[0]:'—'; };
+  const apiName=(pc:'PAYIN'|'PAYOUT')=>{ const p=providers.find((x:any)=>x.id===liveId(pc)); return p?String(p.name||'').split(' (')[0]:'No API'; };
   return <div className="flex-1 min-h-0 flex flex-col gap-3">
-    <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-3">
-      <div className="kpi-peach"><p className="text-[26px] font-bold tnum leading-none truncate">{inr(pi.total)}</p><p className="text-[12.5px] font-semibold mt-3">Pay-in</p><p className="text-[11px] text-slate-500">Today {inr(pi.today)}</p></div>
-      <div className="kpi-mint"><p className="text-[26px] font-bold tnum leading-none truncate">{inr(po.total)}</p><p className="text-[12.5px] font-semibold mt-3">Payout</p><p className="text-[11px] text-slate-500">Today {inr(po.today)}</p></div>
-      <div className="kpi-sky"><p className="text-[26px] font-bold tnum leading-none">{pi.rate==null&&po.rate==null?'—':`${Math.round(((pi.rate||0)+(po.rate||0))/((pi.rate==null?0:1)+(po.rate==null?0:1))||0)}%`}</p><p className="text-[12.5px] font-semibold mt-3">Success</p><p className="text-[11px] text-slate-500">{selected?(selected.name||'').split(' (')[0]:'No API'}</p></div>
-      <div className="kpi-lilac"><p className="text-[26px] font-bold leading-none truncate">{selected?(selected.name||'API').split(' (')[0]:'—'}</p><p className="text-[12.5px] font-semibold mt-3">Live API</p><p className="text-[11px] text-slate-500">{selected?.isMock?'Sandbox':'Real payments'}</p></div>
+    <div className="shrink-0 grid md:grid-cols-2 gap-3">
+      <AtmCard kind="PAYIN" apiName={apiName('PAYIN')} charge={fee('payinChargePercent')} balance={inr(book('payinPaise'))} onClick={()=>{ const id=liveId('PAYIN'); if(id) setSel(id); }}/>
+      <AtmCard kind="PAYOUT" apiName={apiName('PAYOUT')} charge={fee('payoutChargePercent')} balance={inr(book('payoutPaise'))} onClick={()=>{ const id=liveId('PAYOUT'); if(id) setSel(id); }}/>
     </div>
     <div className="flex-1 min-h-0 bg-white rounded-[16px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden flex">
       <aside className="w-[260px] shrink-0 border-r border-slate-100 flex flex-col min-h-0">
