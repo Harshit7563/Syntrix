@@ -29,13 +29,13 @@ function Shell(){
 
   const rail: [string,string,string][] = admin?[
     ['/app','Home',I.home],
+    ['/app/merchants','Merchants',I.users],
     ['/app/transactions','Transactions',I.txn],
     ['/app/reports','Reports',I.chart],
     ['/app/pay-in','Pay-in',I.box],
     ['/app/payouts','Payouts',I.card],
     ['/app/providers','APIs',I.shield],
     ['/app/logs','Logs',I.doc],
-    ['/app/merchants','Merchants',I.users],
     ['/app/members','Members',I.users],
     ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
@@ -53,14 +53,17 @@ function Shell(){
   ];
 
   const topTabs: [string,string][] = admin?[
-    ['/app','Dashboard'],
-    ['/app/pay-in','Collection'],
-    ['/app/payouts','Payouts'],
+    ['/app','Home'],
+    ['/app/merchants','Merchants'],
     ['/app/transactions','Transactions'],
     ['/app/reports','Reports'],
+    ['/app/pay-in','Pay-in'],
+    ['/app/payouts','Payouts'],
     ['/app/providers','APIs'],
     ['/app/logs','Logs'],
     ['/app/members','Members'],
+    ['/app/playground','Docs'],
+    ['/app/settings','Settings'],
   ]:[
     ['/app','Dashboard'],
     ['/app/pay-in','Collection'],
