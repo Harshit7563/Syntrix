@@ -156,6 +156,9 @@ import { TxnEventsService } from './txn-events.service';
   }
   /** Slab that contains the amount wins. If none, the merchant's flat plan is used. */
   private async commissionFor(merchantId: string, productCode: string, amount: number, price: { feeBps?: number; feeFlatPaise?: bigint | null } | null) {
+    const merchant = await this.p.merchantProfile.findUnique({ where: { id: merchantId }, select: { payinChargeBps: true, payoutChargeBps: true } });
+    const explicit = productCode === 'PAYOUT' ? merchant?.payoutChargeBps : merchant?.payinChargeBps;
+    if (explicit != null) return feePaise(amount, explicit, 0);
     const slabs = await this.p.commissionSlab.findMany({ where: { merchantId, productCode, isActive: true } });
     const fits = slabs.filter(s => amount >= Number(s.minAmountPaise) && (s.maxAmountPaise == null || amount <= Number(s.maxAmountPaise)));
     fits.sort((a, b) => Number(b.minAmountPaise) - Number(a.minAmountPaise));

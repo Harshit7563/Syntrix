@@ -4,13 +4,18 @@ import { PrismaService } from '../prisma.service';
 import { AuthGuard, Perm, StaffGuard } from '../common/guards';
 import { LedgerService, acct } from './ledger.service';
 
-const STATUSES = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'CLARIFICATION_REQUIRED', 'APPROVED', 'REJECTED', 'SUSPENDED'];
-
 function rupees(v: unknown) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) throw new BadRequestException('Amount must be a non-negative number (rupees)');
   return BigInt(Math.round(n * 100));
+}
+
+function chargeBps(v: unknown) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 100) throw new BadRequestException('API charge must be between 0 and 100 percent');
+  return Math.round(n * 100);
 }
 
 function viewSlab(s: any) {
@@ -45,17 +50,33 @@ export class MerchantDeskController {
     return { payinPaise, payoutPaise, holdPaise: hold, freePayinPaise: Math.max(0, payinPaise - hold) };
   }
 
-  private viewMerchant(m: any, wallet: { payinPaise: number; payoutPaise: number; holdPaise: number; freePayinPaise: number }) {
+  private async chargePercents(m: any) {
+    let payin = m.payinChargeBps == null ? null : m.payinChargeBps / 100;
+    let payout = m.payoutChargeBps == null ? null : m.payoutChargeBps / 100;
+    if (payin == null || payout == null) {
+      const plans = await this.p.pricingPlan.findMany({ where: { merchantId: m.id }, include: { product: { select: { code: true } } } });
+      for (const plan of plans) {
+        if (plan.product.code === 'PAYIN' && payin == null) payin = plan.feeBps / 100;
+        if (plan.product.code === 'PAYOUT' && payout == null) payout = plan.feeBps / 100;
+      }
+    }
+    return { payinChargePercent: payin ?? 0, payoutChargePercent: payout ?? 0 };
+  }
+
+  private async viewMerchant(m: any, wallet: { payinPaise: number; payoutPaise: number; holdPaise: number; freePayinPaise: number }) {
     return {
       id: m.id,
       businessName: m.businessName || '',
+      email: m.email || '',
       entityType: m.entityType || '',
       website: m.website || '',
       gst: m.gst || '',
       status: m.status,
+      active: m.status === 'APPROVED',
       sandboxEnabled: m.sandboxEnabled,
       productionEnabled: m.productionEnabled,
       memberCount: m._count?.members ?? 0,
+      ...(await this.chargePercents(m)),
       ...wallet,
     };
   }
@@ -65,7 +86,7 @@ export class MerchantDeskController {
   async list() {
     const rows = await this.p.merchantProfile.findMany({ orderBy: { createdAt: 'asc' }, include: { _count: { select: { members: true } } } });
     const out = [];
-    for (const m of rows) out.push(this.viewMerchant(m, await this.walletOf(m.id, Number(m.walletHoldPaise || 0))));
+    for (const m of rows) out.push(await this.viewMerchant(m, await this.walletOf(m.id, Number(m.walletHoldPaise || 0))));
     return out;
   }
 
@@ -73,19 +94,22 @@ export class MerchantDeskController {
   @Perm('merchant:write')
   async create(@Body() b: any) {
     const name = String(b.businessName || '').trim();
+    const email = String(b.email || '').trim();
     if (name.length < 2) throw new BadRequestException('Merchant name is required');
-    const status = STATUSES.includes(String(b.status || '')) ? String(b.status) : 'APPROVED';
+    if (email && !email.includes('@')) throw new BadRequestException('Email is not valid');
+    const active = b.active !== false;
     const org = await this.p.organization.create({ data: { name, type: 'MERCHANT' } });
     const row = await this.p.merchantProfile.create({
       data: {
         orgId: org.id,
         businessName: name,
-        entityType: String(b.entityType || '').trim() || null,
-        website: String(b.website || '').trim() || null,
-        gst: String(b.gst || '').trim() || null,
-        status: status as any,
-        sandboxEnabled: b.sandboxEnabled !== false,
-        productionEnabled: !!b.productionEnabled,
+        email: email || null,
+        payinChargeBps: chargeBps(b.payinChargePercent ?? 0),
+        payoutChargeBps: chargeBps(b.payoutChargePercent ?? 0),
+        walletHoldPaise: rupees(b.holdRupees ?? 0) ?? 0n,
+        status: (active ? 'APPROVED' : 'SUSPENDED') as any,
+        sandboxEnabled: true,
+        productionEnabled: true,
         completion: 40,
       },
     });
@@ -99,7 +123,7 @@ export class MerchantDeskController {
         skipDuplicates: true,
       });
     }
-    return this.viewMerchant({ ...row, _count: { members: 0 } }, await this.walletOf(row.id, 0));
+    return await this.viewMerchant({ ...row, _count: { members: 0 } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }
 
   @Post(':merchantId/profile')
@@ -107,22 +131,22 @@ export class MerchantDeskController {
   async saveProfile(@Param('merchantId') merchantId: string, @Body() b: any) {
     const m = await this.merchant(merchantId);
     const name = String(b.businessName || '').trim();
+    const email = String(b.email || '').trim();
     if (name.length < 2) throw new BadRequestException('Merchant name is required');
-    if (b.status && !STATUSES.includes(String(b.status))) throw new BadRequestException('Unknown status');
+    if (email && !email.includes('@')) throw new BadRequestException('Email is not valid');
     const row = await this.p.merchantProfile.update({
       where: { id: m.id },
       data: {
         businessName: name,
-        entityType: String(b.entityType || '').trim() || null,
-        website: String(b.website || '').trim() || null,
-        gst: String(b.gst || '').trim() || null,
-        ...(b.status ? { status: b.status } : {}),
-        sandboxEnabled: !!b.sandboxEnabled,
-        productionEnabled: !!b.productionEnabled,
+        email: email || null,
+        payinChargeBps: chargeBps(b.payinChargePercent ?? 0),
+        payoutChargeBps: chargeBps(b.payoutChargePercent ?? 0),
+        walletHoldPaise: rupees(b.holdRupees ?? 0) ?? 0n,
+        status: (b.active === false ? 'SUSPENDED' : 'APPROVED') as any,
       },
     });
     await this.p.organization.update({ where: { id: m.orgId }, data: { name } });
-    return this.viewMerchant(row, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+    return await this.viewMerchant(row, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }
 
   @Get(':merchantId/wallet')

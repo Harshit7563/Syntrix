@@ -119,6 +119,7 @@ model MerchantProfile {
   orgId                      String              @unique
   org                        Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   businessName               String?
+  email                      String?
   entityType                 String?
   website                    String?
   categories                 String[]
@@ -139,6 +140,9 @@ model MerchantProfile {
   completion                 Int                 @default(0)
   /// Pay-in wallet reserve. This much stays in collections and cannot move to payout.
   walletHoldPaise            BigInt              @default(0)
+  /// Null means use a commission slab or the older pricing plan.
+  payinChargeBps             Int?
+  payoutChargeBps            Int?
   directors                  Director[]
   owners                     BeneficialOwner[]
   bankAccounts               BankAccount[]

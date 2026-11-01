@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, inr, Status } from '../api';
 
-const STATUSES = ['APPROVED', 'UNDER_REVIEW', 'SUSPENDED', 'REJECTED', 'DRAFT'];
-
 export function MerchantDesk() {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['merchant-desk'], queryFn: () => api('/merchant-desk') });
@@ -16,7 +14,7 @@ export function MerchantDesk() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-black tracking-tight text-slate-900">Merchant</h1>
-          <p className="text-[13px] text-slate-500 mt-1">Add a merchant, edit it, choose its APIs, set commission slabs, and run the wallet.</p>
+          <p className="text-[13px] text-slate-500 mt-1">Name, email, pay-in and payout API charge, wallet hold, and member active or deactive.</p>
         </div>
         {open ? (
           <button type="button" className="btn-ghost !rounded-xl" onClick={() => setOpen(null)}>All merchants</button>
@@ -37,18 +35,18 @@ function MerchantTable({ rows, loading, onEdit }: { rows: any[]; loading: boolea
       <table className="w-full text-[13px]">
         <thead>
           <tr className="text-left text-slate-400 text-[11px] uppercase tracking-wide">
-            <th className="pl-5 py-3">Merchant</th><th>Status</th><th>Pay-in</th><th>Payout</th><th>Hold</th><th>Members</th><th className="pr-5"></th>
+            <th className="pl-5 py-3">Name</th><th>Email</th><th>Pay-in charge</th><th>Payout charge</th><th>Wallet hold</th><th>Active</th><th className="pr-5"></th>
           </tr>
         </thead>
         <tbody>
           {rows.map(m => (
             <tr key={m.id} className="border-t border-slate-100">
               <td className="pl-5 py-3 font-semibold text-slate-900">{m.businessName || 'Unnamed'}</td>
-              <td><Status s={m.status} /></td>
-              <td className="tnum">{inr(m.payinPaise)}</td>
-              <td className="tnum">{inr(m.payoutPaise)}</td>
+              <td className="text-slate-500">{m.email || '—'}</td>
+              <td className="tnum">{m.payinChargePercent}%</td>
+              <td className="tnum">{m.payoutChargePercent}%</td>
               <td className="tnum">{inr(m.holdPaise)}</td>
-              <td className="tnum">{m.memberCount}</td>
+              <td><Status s={m.active ? 'APPROVED' : 'SUSPENDED'} /></td>
               <td className="pr-5 text-right"><button type="button" className="text-[12px] font-bold text-slate-700" onClick={() => onEdit(m.id)}>Edit</button></td>
             </tr>
           ))}
@@ -60,7 +58,7 @@ function MerchantTable({ rows, loading, onEdit }: { rows: any[]; loading: boolea
 }
 
 function CreateMerchant({ onDone }: { onDone: (id: string) => void }) {
-  const [form, setForm] = useState({ businessName: '', gst: '', website: '', entityType: '', productionEnabled: false });
+  const [form, setForm] = useState({ businessName: '', email: '', payinChargePercent: '2', payoutChargePercent: '2', holdRupees: '0', active: true });
   const [err, setErr] = useState('');
   const save = useMutation({
     mutationFn: () => api('/merchant-desk', { method: 'POST', body: form }),
@@ -70,10 +68,11 @@ function CreateMerchant({ onDone }: { onDone: (id: string) => void }) {
   return (
     <form className="bg-white rounded-2xl border border-slate-200/80 p-4 grid md:grid-cols-4 gap-3 items-end" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
       <div><label className="label">Name</label><input className="input !rounded-xl" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></div>
-      <div><label className="label">Entity</label><input className="input !rounded-xl" value={form.entityType} onChange={e => setForm({ ...form, entityType: e.target.value })} placeholder="Private Limited" /></div>
-      <div><label className="label">GST</label><input className="input !rounded-xl" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-      <div><label className="label">Website</label><input className="input !rounded-xl" value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} /></div>
-      <label className="md:col-span-2 flex items-center gap-2 text-[13px] font-semibold text-slate-700"><input type="checkbox" checked={form.productionEnabled} onChange={e => setForm({ ...form, productionEnabled: e.target.checked })} /> Production on</label>
+      <div><label className="label">Email</label><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+      <div><label className="label">API charge pay-in %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></div>
+      <div><label className="label">API charge payout %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></div>
+      <div><label className="label">Wallet hold ₹</label><input className="input !rounded-xl tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></div>
+      <label className="flex items-center gap-2 text-[13px] font-semibold text-slate-700 mb-2"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
       <button className="btn !rounded-xl md:col-span-2" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Create merchant'}</button>
       {err && <p className="md:col-span-4 text-[12.5px] text-rose-600">{err}</p>}
     </form>
@@ -86,7 +85,6 @@ function Editor({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
       <ProfileBlock merchant={merchant} onSaved={onSaved} />
       <WalletBlock merchant={merchant} onSaved={onSaved} />
       <ApiBlock merchantId={merchant.id} />
-      <SlabBlock merchantId={merchant.id} />
       <MemberBlock merchantId={merchant.id} onChange={onSaved} />
     </div>
   );
@@ -95,12 +93,11 @@ function Editor({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
 function ProfileBlock({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
   const [form, setForm] = useState({
     businessName: merchant.businessName || '',
-    entityType: merchant.entityType || '',
-    gst: merchant.gst || '',
-    website: merchant.website || '',
-    status: merchant.status || 'APPROVED',
-    sandboxEnabled: !!merchant.sandboxEnabled,
-    productionEnabled: !!merchant.productionEnabled,
+    email: merchant.email || '',
+    payinChargePercent: String(merchant.payinChargePercent ?? 0),
+    payoutChargePercent: String(merchant.payoutChargePercent ?? 0),
+    holdRupees: String((merchant.holdPaise || 0) / 100),
+    active: !!merchant.active,
   });
   const [err, setErr] = useState('');
   const save = useMutation({
@@ -110,16 +107,15 @@ function ProfileBlock({ merchant, onSaved }: { merchant: any; onSaved: () => voi
   });
   return (
     <form className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-      <h2 className="font-bold text-slate-900">Merchant details</h2>
-      <div className="grid md:grid-cols-4 gap-3">
+      <h2 className="font-bold text-slate-900">Merchant</h2>
+      <div className="grid md:grid-cols-3 gap-3">
         <div><label className="label">Name</label><input className="input !rounded-xl" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></div>
-        <div><label className="label">Entity</label><input className="input !rounded-xl" value={form.entityType} onChange={e => setForm({ ...form, entityType: e.target.value })} /></div>
-        <div><label className="label">GST</label><input className="input !rounded-xl" value={form.gst} onChange={e => setForm({ ...form, gst: e.target.value })} /></div>
-        <div><label className="label">Website</label><input className="input !rounded-xl" value={form.website} onChange={e => setForm({ ...form, website: e.target.value })} /></div>
-        <div><label className="label">Status</label><select className="input !rounded-xl" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-        <label className="flex items-center gap-2 text-[13px] font-semibold mt-6"><input type="checkbox" checked={form.sandboxEnabled} onChange={e => setForm({ ...form, sandboxEnabled: e.target.checked })} /> Sandbox</label>
-        <label className="flex items-center gap-2 text-[13px] font-semibold mt-6"><input type="checkbox" checked={form.productionEnabled} onChange={e => setForm({ ...form, productionEnabled: e.target.checked })} /> Production</label>
-        <button className="btn !rounded-xl mt-5" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save merchant'}</button>
+        <div><label className="label">Email</label><input className="input !rounded-xl" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+        <div><label className="label">Wallet hold ₹</label><input className="input !rounded-xl tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></div>
+        <div><label className="label">API charge pay-in %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></div>
+        <div><label className="label">API charge payout %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></div>
+        <label className="flex items-center gap-2 text-[13px] font-semibold mt-6"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
+        <button className="btn !rounded-xl" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
       </div>
       {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
     </form>
@@ -127,14 +123,8 @@ function ProfileBlock({ merchant, onSaved }: { merchant: any; onSaved: () => voi
 }
 
 function WalletBlock({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
-  const [hold, setHold] = useState(String((merchant.holdPaise || 0) / 100));
   const [move, setMove] = useState({ amountRupees: '', direction: 'TO_PAYOUT' });
   const [err, setErr] = useState('');
-  const setHoldAmt = useMutation({
-    mutationFn: () => api('/merchant-desk/' + merchant.id + '/wallet/hold', { method: 'POST', body: { holdRupees: Number(hold) } }),
-    onSuccess: () => { setErr(''); onSaved(); },
-    onError: (e: any) => setErr(e.message || 'Could not set hold'),
-  });
   const moveAmt = useMutation({
     mutationFn: () => api('/merchant-desk/' + merchant.id + '/wallet/move', { method: 'POST', body: { amountRupees: Number(move.amountRupees), direction: move.direction } }),
     onSuccess: () => { setErr(''); setMove({ ...move, amountRupees: '' }); onSaved(); },
@@ -158,17 +148,11 @@ function WalletBlock({ merchant, onSaved }: { merchant: any; onSaved: () => void
           </div>
         ))}
       </div>
-      <div className="grid lg:grid-cols-2 gap-4">
-        <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); setHoldAmt.mutate(); }}>
-          <div><label className="label">Hold in pay-in wallet (₹)</label><input className="input !rounded-xl tnum w-40" type="number" min={0} step="0.01" value={hold} onChange={e => setHold(e.target.value)} /></div>
-          <button className="btn !rounded-xl" disabled={setHoldAmt.isPending}>{setHoldAmt.isPending ? 'Saving…' : 'Set hold'}</button>
-        </form>
-        <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); moveAmt.mutate(); }}>
+      <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); moveAmt.mutate(); }}>
           <div><label className="label">Move amount (₹)</label><input className="input !rounded-xl tnum w-36" type="number" min={0} step="0.01" value={move.amountRupees} onChange={e => setMove({ ...move, amountRupees: e.target.value })} required /></div>
           <div><label className="label">Direction</label><select className="input !rounded-xl" value={move.direction} onChange={e => setMove({ ...move, direction: e.target.value })}><option value="TO_PAYOUT">Pay-in → Payout</option><option value="TO_PAYIN">Payout → Pay-in</option></select></div>
           <button className="btn !rounded-xl" disabled={moveAmt.isPending}>{moveAmt.isPending ? 'Moving…' : 'Move'}</button>
-        </form>
-      </div>
+      </form>
       {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
     </section>
   );
@@ -210,74 +194,13 @@ function MemberBlock({ merchantId, onChange }: { merchantId: string; onChange: (
                 <td className="tnum">{m.mobile}</td>
                 <td className="font-mono text-[11px] text-slate-500">{m.id}</td>
                 <td>{m.status}</td>
-                <td className="text-right"><button type="button" className="text-[12px] font-bold text-slate-600" onClick={() => toggle.mutate(m)}>{m.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button></td>
+                <td className="text-right"><button type="button" className={`text-[12px] font-bold ${m.status === 'ACTIVE' ? 'text-rose-600' : 'text-emerald-700'}`} onClick={() => toggle.mutate(m)}>{m.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}</button></td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={5} className="py-6 text-slate-400">{q.isLoading ? 'Loading…' : 'No members for this merchant.'}</td></tr>}
           </tbody>
         </table>
       </div>
-    </section>
-  );
-}
-
-function SlabBlock({ merchantId }: { merchantId: string }) {
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['slabs', merchantId], queryFn: () => api('/merchant-desk/' + merchantId + '/slabs') });
-  const [form, setForm] = useState({ productCode: 'PAYIN', minRupees: '0', maxRupees: '', feePercent: '2' });
-  const [edit, setEdit] = useState<any>(null);
-  const [err, setErr] = useState('');
-  const refresh = () => qc.invalidateQueries({ queryKey: ['slabs', merchantId] });
-  const save = useMutation({
-    mutationFn: () => api('/merchant-desk/' + merchantId + '/slabs', { method: 'POST', body: { ...form, maxRupees: form.maxRupees === '' ? null : Number(form.maxRupees), minRupees: Number(form.minRupees), feePercent: Number(form.feePercent) } }),
-    onSuccess: () => { setErr(''); refresh(); },
-    onError: (e: any) => setErr(e.message || 'Could not save slab'),
-  });
-  const update = useMutation({
-    mutationFn: () => api('/merchant-desk/slabs/' + edit.id, { method: 'POST', body: { ...edit, maxRupees: edit.maxRupees === '' || edit.maxRupees == null ? null : Number(edit.maxRupees), minRupees: Number(edit.minRupees), feePercent: Number(edit.feePercent) } }),
-    onSuccess: () => { setEdit(null); setErr(''); refresh(); },
-    onError: (e: any) => setErr(e.message || 'Could not update slab'),
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => api('/merchant-desk/slabs/' + id + '/remove', { method: 'POST', body: {} }),
-    onSuccess: () => refresh(),
-  });
-  const rows = Array.isArray(q.data) ? q.data : [];
-  return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 p-4 space-y-3">
-      <h2 className="font-bold text-slate-900">Commission slabs</h2>
-      <p className="text-[12.5px] text-slate-500">The slab that contains the amount is charged. Edit a row, or add a new range.</p>
-      <form className="grid md:grid-cols-5 gap-3 items-end" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-        <div><label className="label">Side</label><select className="input !rounded-xl" value={form.productCode} onChange={e => setForm({ ...form, productCode: e.target.value })}><option value="PAYIN">Pay-in</option><option value="PAYOUT">Payout</option></select></div>
-        <div><label className="label">From ₹</label><input className="input !rounded-xl tnum" type="number" min={0} value={form.minRupees} onChange={e => setForm({ ...form, minRupees: e.target.value })} /></div>
-        <div><label className="label">To ₹</label><input className="input !rounded-xl tnum" type="number" min={0} placeholder="No max" value={form.maxRupees} onChange={e => setForm({ ...form, maxRupees: e.target.value })} /></div>
-        <div><label className="label">Commission %</label><input className="input !rounded-xl tnum" type="number" min={0} max={100} step="0.01" value={form.feePercent} onChange={e => setForm({ ...form, feePercent: e.target.value })} /></div>
-        <button className="btn !rounded-xl" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Add slab'}</button>
-      </form>
-      <table className="w-full text-[13px]">
-        <thead><tr className="text-left text-slate-400 text-[11px] uppercase tracking-wide"><th className="py-2">Side</th><th>From</th><th>To</th><th>%</th><th></th></tr></thead>
-        <tbody>
-          {rows.map((s: any) => edit?.id === s.id ? (
-            <tr key={s.id} className="border-t border-slate-100">
-              <td className="py-2"><select className="input !rounded-xl !py-1" value={edit.productCode} onChange={e => setEdit({ ...edit, productCode: e.target.value })}><option value="PAYIN">Pay-in</option><option value="PAYOUT">Payout</option></select></td>
-              <td><input className="input !rounded-xl !py-1 tnum w-24" type="number" min={0} value={edit.minRupees} onChange={e => setEdit({ ...edit, minRupees: e.target.value })} /></td>
-              <td><input className="input !rounded-xl !py-1 tnum w-24" type="number" min={0} placeholder="No max" value={edit.maxRupees ?? ''} onChange={e => setEdit({ ...edit, maxRupees: e.target.value })} /></td>
-              <td><input className="input !rounded-xl !py-1 tnum w-20" type="number" min={0} step="0.01" value={edit.feePercent} onChange={e => setEdit({ ...edit, feePercent: e.target.value })} /></td>
-              <td className="text-right whitespace-nowrap"><button type="button" className="text-[12px] font-bold text-slate-900 mr-3" onClick={() => update.mutate()}>Save</button><button type="button" className="text-[12px] font-bold text-slate-400" onClick={() => setEdit(null)}>Cancel</button></td>
-            </tr>
-          ) : (
-            <tr key={s.id} className="border-t border-slate-100">
-              <td className="py-2.5 font-semibold">{s.productCode === 'PAYOUT' ? 'Payout' : 'Pay-in'}</td>
-              <td className="tnum">₹{s.minRupees}</td>
-              <td className="tnum">{s.maxRupees == null ? 'No max' : '₹' + s.maxRupees}</td>
-              <td className="tnum">{s.feePercent}%</td>
-              <td className="text-right whitespace-nowrap"><button type="button" className="text-[12px] font-bold text-slate-700 mr-3" onClick={() => setEdit({ ...s })}>Edit</button><button type="button" className="text-[12px] font-bold text-rose-600" onClick={() => remove.mutate(s.id)}>Remove</button></td>
-            </tr>
-          ))}
-          {!rows.length && <tr><td colSpan={5} className="py-6 text-slate-400">{q.isLoading ? 'Loading…' : 'No slabs yet.'}</td></tr>}
-        </tbody>
-      </table>
-      {err && <p className="text-[12.5px] text-rose-600">{err}</p>}
     </section>
   );
 }
