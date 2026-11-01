@@ -285,12 +285,13 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
  const addProvider=async()=>{ const code=(f.code||f.name).toUpperCase().replace(/[^A-Z0-9]+/g,'').slice(0,20); if(!f.name) return setMsg('Enter a name for this API'); if(!f.isMock&&!f.baseUrl) return setMsg('Enter the Base URL (or tick Mock for a test API)'); try{ const prov=await api('/admin/providers',{method:'POST',body:{code,name:f.name,baseUrl:f.baseUrl,kind:f.kind,isMock:f.isMock,services:f.services,config:{authType:f.authType,apiKeyHeader:f.apiKeyHeader,amountUnit:f.amountUnit,payinPath:f.payinPath,payoutPath:f.payoutPath,payinStatusPath:f.payinStatusPath,payoutStatusPath:f.payoutStatusPath,refundPath:f.refundPath}}}); if(f.apiKey) await api(`/admin/providers/${prov.id}/keys`,{method:'POST',body:{label:f.keyLabel||'Primary',apiKey:f.apiKey,apiSecret:f.apiSecret||undefined}}); setMsg(`Done ✓ ${f.name} connected.`); setShowAdd(false); qc.invalidateQueries({queryKey:['aprov']}); qc.invalidateQueries({queryKey:['apiswitch']}); }catch(e:any){ setMsg(e.message); } };
  const testConn=async(id:string)=>{ setTestRes({...testRes,[id]:{note:'Testing…'}}); try{ const r=await api(`/admin/providers/${id}/test`,{method:'POST',body:{}}); setTestRes({...testRes,[id]:r}); }catch(e:any){ setTestRes({...testRes,[id]:{ok:false,note:e.message}}); } };
  const avatars=['#111','#f4a28c','#9ad4b5','#9ec5e8','#c9b8e8','#f0c96a'];
+ const apis=(Array.isArray(data)?data:[]).filter((p:any)=>p.isActive!==false);
 
  return <div className="space-y-8 w-full">
   <div className="flex flex-wrap items-end justify-between gap-3">
     <h2 className="text-[22px] font-bold text-slate-900 tracking-tight">APIs Management</h2>
     <div className="flex items-center gap-2">
-      <span className="text-[12.5px] font-semibold text-slate-500">{data?.length||0} connected</span>
+      <span className="text-[12.5px] font-semibold text-slate-500">{apis.length} connected</span>
       <a href="/app/test-api" className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-800 text-[12.5px] font-semibold hover:bg-slate-50 inline-flex items-center">Test API</a>
       <button type="button" className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black" onClick={()=>setShowAdd(true)}>+ Add API</button>
     </div>
@@ -300,9 +301,9 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
 
   <section>
     <h3 className="text-[16px] font-bold text-slate-900 mb-3">Connected APIs</h3>
-    {!data?.length&&<div className="rounded-[22px] border border-dashed border-slate-200 bg-white py-12 text-center text-[13px] text-slate-400">No API yet — add one below.</div>}
+    {!apis.length&&<div className="rounded-[22px] border border-dashed border-slate-200 bg-white py-12 text-center text-[13px] text-slate-400">No API yet — add one below.</div>}
     <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-      {data?.map((p:any,i:number)=>{
+      {apis.map((p:any,i:number)=>{
         const st=combined(p.id); const activeKey=(p.keys||[]).find((k:any)=>k.isActive); const open=openKeys===p.id; const tr=testRes[p.id];
         return <div key={p.id} className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4 flex flex-col">
           <div className="flex items-start gap-3">
