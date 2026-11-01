@@ -90,6 +90,10 @@ function ApiSwitch(){
   const [draft,setDraft]=useState<Record<string,{min:string;max:string}>>({});
   const [busy,setBusy]=useState('');
   const [pick,setPick]=useState<{PAYIN:string;PAYOUT:string}>({PAYIN:'',PAYOUT:''});
+  const [sel,setSel]=useState('');
+  const [keysOpen,setKeysOpen]=useState(false);
+  const [testNote,setTestNote]=useState<any>(null);
+  const provsQ=useQ('aprov','/admin/providers');
   if(!data) return <div className="grid md:grid-cols-2 gap-3">{[1,2].map(i=><div key={i} className="h-48 rounded-[22px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   const flash=(t:string)=>{ setMsg(t); setTimeout(()=>setMsg(''),2800); };
@@ -143,114 +147,115 @@ function ApiSwitch(){
   const fmtShort=(paise:number)=>{ const n=Number(paise||0)/100; if(n>=10000000) return (n/10000000).toFixed(1)+'Cr'; if(n>=100000) return (n/100000).toFixed(1)+'L'; if(n>=1000) return (n/1000).toFixed(1)+'k'; return Math.round(n).toLocaleString('en-IN'); };
 
   const resetCircuit=async(pid:string)=>{ setBusy('circ-'+pid); try{ await api(`/admin/providers/${pid}/circuit-reset`,{method:'POST',body:{}}); flash('Circuit reset'); refetch(); }catch(e:any){ flash(e.message); } finally{ setBusy(''); } };
+  const testConn=async(id:string)=>{ setTestNote({note:'Testing…'}); try{ setTestNote(await api(`/admin/providers/${id}/test`,{method:'POST',body:{}})); }catch(e:any){ setTestNote({ok:false,note:e.message}); } };
   const avatars=['#111','#f4a28c','#9ad4b5','#9ec5e8','#c9b8e8','#f0c96a'];
-  const SideCard=({pr,pc,idx}:{pr:any;pc:'PAYIN'|'PAYOUT';idx:number})=>{
-    const isPayin=pc==='PAYIN';
-    const st=stat(pc,pr.id);
-    const r=routeFor(pr.id,pc);
-    const on=!!r?.isActive;
-    const rg=getRange(pr.id,pc);
-    const dirty=!!draft[draftKey(pr.id,pc)];
-    const circ=!!pr.circuitOpen;
-    const sc=st?.successCount||0, fl=st?.failedCount||0;
-    const rate=(sc+fl)?Math.round(sc/(sc+fl)*100):null;
-    return <div className={`bg-white rounded-[22px] border shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4 flex flex-col ${circ?'border-amber-300':'border-slate-200/70'}`}>
-      <div className="flex items-start gap-3">
-        <span className="w-11 h-11 rounded-2xl text-white grid place-items-center text-[14px] font-extrabold shrink-0" style={{background:avatars[idx%avatars.length]}}>{(pr.name||'?').charAt(0)}</span>
+  const selected=providers.find(p=>p.id===sel)||providers.find(p=>p.id===liveId('PAYIN'))||providers[0];
+  const full=(Array.isArray(provsQ.data)?provsQ.data:[]).find((p:any)=>p.id===selected?.id);
+  const sumKind=(kind:'PAYIN'|'PAYOUT')=>{ const st=selected?stat(kind,selected.id):null; return {total:Number(st?.totalAmountPaise||0),today:Number(st?.todayAmountPaise||0),rate:(()=>{ const sc=st?.successCount||0,fl=st?.failedCount||0; return (sc+fl)?Math.round(sc/(sc+fl)*100):null; })()}; };
+  const pi=sumKind('PAYIN'), po=sumKind('PAYOUT');
+  const Lane=({pc,title,tone}:{pc:'PAYIN'|'PAYOUT';title:string;tone:string})=>{
+    if(!selected) return null;
+    const st=stat(pc,selected.id); const r=routeFor(selected.id,pc); const on=!!r?.isActive; const rg=getRange(selected.id,pc); const dirty=!!draft[draftKey(selected.id,pc)];
+    const sc=st?.successCount||0, fl=st?.failedCount||0; const rate=(sc+fl)?Math.round(sc/(sc+fl)*100):null;
+    return <div className="rounded-[20px] border border-slate-100 p-4">
+      <div className="flex items-center gap-3">
+        <span className={`w-10 h-10 rounded-2xl shrink-0 ${tone}`}/>
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-slate-900 text-[14.5px] truncate">{(pr.name||'').split(' (')[0]}</p>
-          <p className="text-[11.5px] text-slate-400 mt-0.5">{isPayin?'Collection':'Payout'} · {pr.code}</p>
-          <div className="flex flex-wrap gap-1.5 mt-2">
-            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${pr.isMock?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'}`}>{pr.isMock?'Sandbox':'Live'}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${circ?'bg-amber-100 text-amber-800':on?'bg-slate-900 text-white':'bg-slate-100 text-slate-500'}`}>{circ?'Circuit':on?'On':'Off'}</span>
-          </div>
+          <p className="font-bold text-slate-900">{title}</p>
+          <p className="text-[12.5px] text-slate-400">{on?'This API is taking these payments.':'Off. New payments will not use it.'}</p>
         </div>
-        <button type="button" disabled={busy===`tog-${pr.id}-${pc}`} title={on?'Turn off':'Turn on'} onClick={()=>toggle(pr.id,pc)}
-          className={`relative w-11 rounded-full shrink-0 transition mt-1 ${on&&!circ?'bg-emerald-500':circ?'bg-amber-500':'bg-slate-300'} disabled:opacity-60`} style={{height:24}}>
-          <span className={`absolute top-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition ${on?'left-[22px]':'left-0.5'}`}/>
+        <button type="button" disabled={busy===`tog-${selected.id}-${pc}`} onClick={()=>toggle(selected.id,pc)} className={`relative w-11 h-6 rounded-full shrink-0 transition ${on?'bg-emerald-500':'bg-slate-300'} disabled:opacity-60`}>
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition ${on?'left-[22px]':'left-0.5'}`}/>
         </button>
       </div>
-      {circ&&<div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
-        <span className="text-[11.5px] font-semibold text-amber-800 flex-1">Circuit open — new traffic skips this API.</span>
-        <button className="text-[11.5px] font-bold text-amber-900 underline shrink-0" disabled={busy==='circ-'+pr.id} onClick={()=>resetCircuit(pr.id)}>Reset</button>
-      </div>}
-      <div className="grid grid-cols-3 gap-2 mt-3">
-        <div className="rounded-2xl bg-[#fdf0ea] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{fmtShort(st?.totalAmountPaise||0)}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Total</p></div>
-        <div className="rounded-2xl bg-[#eaf7f0] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{fmtShort(st?.todayAmountPaise||0)}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Today</p></div>
-        <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${rate==null?'text-slate-400':rate>=80?'text-emerald-600':'text-amber-600'}`}>{rate==null?'—':rate+'%'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className="text-[16px] font-bold tnum text-slate-900">{inr(st?.totalAmountPaise||0)}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Total</p></div>
+        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className="text-[16px] font-bold tnum text-slate-900">{inr(st?.todayAmountPaise||0)}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Today</p></div>
+        <div className="rounded-2xl bg-[#f7f8fa] px-3 py-2.5"><p className={`text-[16px] font-bold tnum ${rate==null?'text-slate-400':'text-slate-900'}`}>{rate==null?'—':rate+'%'}</p><p className="text-[11px] font-semibold text-slate-400 mt-0.5">Success</p></div>
       </div>
-      <div className="grid grid-cols-2 gap-2 mt-3">
-        <div>
-          <label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">Start ₹</label>
-          <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#f7f8fa] px-2.5 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="0" value={rg.min} onChange={e=>setRange(pr.id,pc,{min:e.target.value})}/>
-        </div>
-        <div>
-          <label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">End ₹</label>
-          <input className="mt-1 w-full rounded-xl border border-slate-200 bg-[#f7f8fa] px-2.5 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="No max" value={rg.max} onChange={e=>setRange(pr.id,pc,{max:e.target.value})}/>
-        </div>
+      <div className="flex flex-wrap items-end gap-2 mt-4">
+        <div><label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">From ₹</label><input className="mt-1 w-28 rounded-xl border border-slate-200 bg-[#f7f8fa] px-3 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="0" value={rg.min} onChange={e=>setRange(selected.id,pc,{min:e.target.value})}/></div>
+        <div><label className="text-[10.5px] font-bold uppercase tracking-wide text-slate-400">To ₹</label><input className="mt-1 w-28 rounded-xl border border-slate-200 bg-[#f7f8fa] px-3 py-2 text-[13px] font-semibold tnum outline-none focus:border-slate-400 focus:bg-white" type="number" min={0} placeholder="No max" value={rg.max} onChange={e=>setRange(selected.id,pc,{max:e.target.value})}/></div>
+        {dirty&&<button type="button" disabled={busy===`save-${selected.id}-${pc}`} onClick={()=>saveRange(selected.id,pc)} className="h-10 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold">{busy===`save-${selected.id}-${pc}`?'Saving…':'Save range'}</button>}
       </div>
-      <button type="button" disabled={busy===`save-${pr.id}-${pc}`||!dirty} onClick={()=>saveRange(pr.id,pc)}
-        className={`mt-3 w-full h-9 rounded-xl text-[12.5px] font-semibold border transition ${dirty?'bg-slate-900 border-slate-900 text-white hover:bg-black':'border-slate-200 bg-white text-slate-700'}`}>
-        {busy===`save-${pr.id}-${pc}`?'Saving…':dirty?'Save range':'Range saved'}
-      </button>
     </div>;
   };
 
-  const Col=({pc,title,sub}:{pc:'PAYIN'|'PAYOUT';title:string;sub:string})=>(
-    <div className="min-w-0">
-      <div className="flex items-end justify-between mb-3">
-        <div>
-          <h3 className="text-[16px] font-bold text-slate-900">{title}</h3>
-          <p className="text-[12.5px] text-slate-400">{sub}</p>
+  return <div className="flex-1 min-h-0 flex flex-col gap-3">
+    <div className="shrink-0 grid grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="kpi-peach"><p className="text-[26px] font-bold tnum leading-none truncate">{inr(pi.total)}</p><p className="text-[12.5px] font-semibold mt-3">Pay-in</p><p className="text-[11px] text-slate-500">Today {inr(pi.today)}</p></div>
+      <div className="kpi-mint"><p className="text-[26px] font-bold tnum leading-none truncate">{inr(po.total)}</p><p className="text-[12.5px] font-semibold mt-3">Payout</p><p className="text-[11px] text-slate-500">Today {inr(po.today)}</p></div>
+      <div className="kpi-sky"><p className="text-[26px] font-bold tnum leading-none">{pi.rate==null&&po.rate==null?'—':`${Math.round(((pi.rate||0)+(po.rate||0))/((pi.rate==null?0:1)+(po.rate==null?0:1))||0)}%`}</p><p className="text-[12.5px] font-semibold mt-3">Success</p><p className="text-[11px] text-slate-500">{selected?(selected.name||'').split(' (')[0]:'No API'}</p></div>
+      <div className="kpi-lilac"><p className="text-[26px] font-bold leading-none truncate">{selected?(selected.name||'API').split(' (')[0]:'—'}</p><p className="text-[12.5px] font-semibold mt-3">Live API</p><p className="text-[11px] text-slate-500">{selected?.isMock?'Sandbox':'Real payments'}</p></div>
+    </div>
+    <div className="flex-1 min-h-0 bg-white rounded-[16px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden flex">
+      <aside className="w-[260px] shrink-0 border-r border-slate-100 flex flex-col min-h-0">
+        <div className="px-4 py-3 border-b border-slate-100"><p className="text-[13px] font-bold text-slate-900">APIs <span className="text-slate-400 font-semibold">{providers.length}</span></p></div>
+        <div className="flex-1 min-h-0 overflow-auto">
+          {!providers.length&&<p className="px-4 py-8 text-center text-[13px] text-slate-400">No API connected.</p>}
+          {providers.map((pr:any,i:number)=>{
+            const on=pr.id===(selected?.id);
+            const live=liveId('PAYIN')===pr.id||liveId('PAYOUT')===pr.id;
+            return <button key={pr.id} type="button" onClick={()=>setSel(pr.id)} className={`w-full text-left px-3 py-3 border-b border-slate-50 flex items-center gap-3 ${on?'bg-[#f4f6f8]':'hover:bg-[#fafbfd]'}`}>
+              <span className="w-9 h-9 rounded-xl text-white grid place-items-center text-[13px] font-extrabold shrink-0" style={{background:avatars[i%avatars.length]}}>{(pr.name||'?').charAt(0)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-semibold text-slate-900 truncate">{String(pr.name||'').split(' (')[0]}</span>
+                <span className="block text-[11.5px] text-slate-400 truncate">{pr.code} · {pr.isMock?'Sandbox':'Live'}</span>
+              </span>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${live?'bg-emerald-500':'bg-slate-300'}`}/>
+            </button>;
+          })}
         </div>
-        <span className="text-[12.5px] font-semibold text-slate-500">{providers.filter(p=>routeFor(p.id,pc)?.isActive).length} on</span>
-      </div>
-      <div className="grid sm:grid-cols-2 gap-3">
-        {!providers.length&&<div className="sm:col-span-2 rounded-[22px] border border-dashed border-slate-200 bg-white py-12 text-center text-[13px] text-slate-400">No API yet — add one below.</div>}
-        {providers.map((pr:any,i:number)=><SideCard key={pr.id+pc} pr={pr} pc={pc} idx={i}/>)}
-      </div>
-    </div>
-  );
-
-  return <div className="space-y-6">
-    <div className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4">
-      <h3 className="text-[16px] font-bold text-slate-900">API Switch</h3>
-      <p className="text-[12.5px] text-slate-400 mt-0.5">One live API for pay-in and one for payout. Switch turns the other platform APIs off for that side.</p>
-      <div className="grid md:grid-cols-2 gap-3 mt-3">
-        {(['PAYIN','PAYOUT'] as const).map(pc=>(
-          <div key={pc} className="flex items-center gap-2">
-            <span className="w-16 text-[13px] font-semibold text-slate-700">{pc==='PAYIN'?'Pay-in':'Payout'}</span>
-            <select className="input !rounded-xl flex-1" value={pick[pc]||liveId(pc)} onChange={e=>setPick({...pick,[pc]:e.target.value})}>
-              <option value="">Select API</option>
-              {providers.map((p:any)=><option key={p.id} value={p.id}>{String(p.name||'').split(' (')[0]}</option>)}
-            </select>
-            <button type="button" className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60" disabled={busy===pc} onClick={()=>useApi(pc)}>{busy===pc?'…':'Switch'}</button>
+      </aside>
+      <section className="flex-1 min-w-0 min-h-0 overflow-auto p-5">
+        {!selected&&<div className="h-full grid place-items-center text-[13px] text-slate-400">No API connected.</div>}
+        {selected&&<div className="max-w-3xl space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[18px] font-bold text-slate-900">{String(selected.name||'').split(' (')[0]}</p>
+              <p className="text-[12.5px] text-slate-400">{selected.code} · {selected.isMock?'Sandbox provider':'Live provider'}</p>
+            </div>
+            {(liveId('PAYIN')!==selected.id||liveId('PAYOUT')!==selected.id)&&<button type="button" disabled={busy==='live'} onClick={async()=>{ setBusy('live'); try{ await api('/admin/api-switch/use',{method:'POST',body:{productCode:'PAYIN',providerId:selected.id}}); await api('/admin/api-switch/use',{method:'POST',body:{productCode:'PAYOUT',providerId:selected.id}}); flash('Live for pay-in and payout'); refetch(); }catch(e:any){ flash(e.message);} finally{ setBusy(''); } }} className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold">{busy==='live'?'Switching…':'Use for both'}</button>}
+            {msg&&<span className="text-[12.5px] font-semibold text-emerald-700">{msg}</span>}
           </div>
-        ))}
-      </div>
-    </div>
-    <div className="grid lg:grid-cols-2 gap-6">
-      <Col pc="PAYIN" title="Pay-in" sub="Collection routing & ranges"/>
-      <Col pc="PAYOUT" title="Payout" sub="Disbursement routing & ranges"/>
-    </div>
-
-    <div className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] px-4 py-3.5 flex flex-wrap items-center gap-2.5">
-      <span className="text-[12.5px] font-semibold text-slate-600">Test amount</span>
-      <div className="flex rounded-xl bg-[#f7f8fa] p-0.5">
-        {([['PAYIN','Pay-in'],['PAYOUT','Payout']] as const).map(([k,l])=>(
-          <button key={k} onClick={()=>{setPreviewPc(k);setPreview(null);}} className={`px-3 py-1.5 rounded-[10px] text-[11.5px] font-bold ${previewPc===k?'bg-slate-900 text-white':'text-slate-500'}`}>{l}</button>
-        ))}
-      </div>
-      <div className="flex items-center rounded-xl border border-slate-200 bg-[#f7f8fa] overflow-hidden">
-        <span className="pl-2.5 text-slate-400 text-[13px]">₹</span>
-        <input className="w-[100px] px-1.5 py-1.5 text-[13px] outline-none bg-transparent" type="number" min={0} value={previewAmt} onChange={e=>setPreviewAmt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&check()}/>
-      </div>
-      <button className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black" onClick={check}>Check</button>
-      {preview&&<span className={`text-[13px] font-semibold ${preview.matched?'text-emerald-700':'text-red-600'}`}>{preview.matched?`→ ${preview.provider?.name?.split(' (')[0]}`:'→ No match'}</span>}
-      {msg&&<span className="ml-auto text-[12px] text-emerald-700 font-medium">{msg}</span>}
+          {selected.circuitOpen&&<div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 flex items-center gap-2">
+            <span className="text-[12.5px] font-semibold text-amber-800 flex-1">Circuit is open. New payments skip this API.</span>
+            <button className="text-[12.5px] font-bold text-amber-900 underline" disabled={busy==='circ-'+selected.id} onClick={()=>resetCircuit(selected.id)}>Reset</button>
+          </div>}
+          <div className="grid lg:grid-cols-2 gap-3">
+            <Lane pc="PAYIN" title="Pay-in" tone="bg-[#f8d5c8]"/>
+            <Lane pc="PAYOUT" title="Payout" tone="bg-[#d8f0e2]"/>
+          </div>
+          <div className="rounded-[20px] bg-[#f7f8fa] px-4 py-3 flex flex-wrap items-center gap-2">
+            <span className="text-[12.5px] font-semibold text-slate-600">Which API takes</span>
+            <div className="flex rounded-full bg-white p-1 border border-slate-200">
+              {([['PAYIN','Pay-in'],['PAYOUT','Payout']] as const).map(([k,l])=>(
+                <button key={k} type="button" onClick={()=>{setPreviewPc(k);setPreview(null);}} className={`h-8 px-3 rounded-full text-[12.5px] font-semibold ${previewPc===k?'bg-slate-900 text-white':'text-slate-500'}`}>{l}</button>
+              ))}
+            </div>
+            <div className="flex items-center rounded-full border border-slate-200 bg-white overflow-hidden">
+              <span className="pl-3 text-slate-400 text-[13px]">₹</span>
+              <input className="w-24 px-2 py-2 text-[13px] outline-none" type="number" min={0} value={previewAmt} onChange={e=>setPreviewAmt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&check()}/>
+            </div>
+            <button type="button" className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold" onClick={check}>Check</button>
+            {preview&&<span className={`text-[13px] font-semibold ${preview.matched?'text-emerald-700':'text-rose-600'}`}>{preview.matched?`→ ${String(preview.provider?.name||'').split(' (')[0]}`:'No API covers this amount'}</span>}
+          </div>
+          <div className="rounded-[20px] border border-slate-100 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <p className="text-[13px] font-bold text-slate-900 flex-1">Key</p>
+              <button type="button" className="h-8 px-3 rounded-full border border-slate-200 text-[12px] font-semibold text-slate-600" onClick={()=>selected&&testConn(selected.id)}>Test</button>
+              <button type="button" className="h-8 px-3 rounded-full bg-slate-900 text-white text-[12px] font-semibold" onClick={()=>setKeysOpen(v=>!v)}>{keysOpen?'Close':'Manage'}</button>
+            </div>
+            <p className="text-[12.5px] text-slate-400 mt-1">{(full?.keys||[]).find((k:any)=>k.isActive)?.masked||'No key attached'}</p>
+            {testNote&&<p className={`mt-2 text-[12.5px] ${testNote.ok?'text-emerald-700':'text-rose-600'}`}>{testNote.ok?'Connected':'Failed'}{testNote.ms?` · ${testNote.ms}ms`:''}{testNote.note?` · ${testNote.note}`:''}</p>}
+            {keysOpen&&full&&<ProviderKeys prov={full} refresh={()=>{ provsQ.refetch(); }}/>}
+          </div>
+        </div>}
+      </section>
     </div>
   </div>;
 }
+
 
 function ProviderKeys({prov,refresh}:{prov:any,refresh:()=>void}){ const [f,setF]=useState({label:'',apiKey:'',apiSecret:''}); const [msg,setMsg]=useState('');
  const add=async()=>{ if(!f.apiKey) return setMsg('Enter an API key'); try{ await api(`/admin/providers/${prov.id}/keys`,{method:'POST',body:f}); setF({label:'',apiKey:'',apiSecret:''}); setMsg('Key added ✓'); refresh(); }catch(e:any){ setMsg(e.message); } };
@@ -287,61 +292,13 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
  const avatars=['#111','#f4a28c','#9ad4b5','#9ec5e8','#c9b8e8','#f0c96a'];
  const apis=(Array.isArray(data)?data:[]).filter((p:any)=>p.isActive!==false);
 
- return <div className="space-y-8 w-full">
-  <div className="flex flex-wrap items-end justify-between gap-3">
-    <h2 className="text-[22px] font-bold text-slate-900 tracking-tight">APIs Management</h2>
-    <div className="flex items-center gap-2">
-      <span className="text-[12.5px] font-semibold text-slate-500">{apis.length} connected</span>
-      <a href="/app/test-api" className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-800 text-[12.5px] font-semibold hover:bg-slate-50 inline-flex items-center">Test API</a>
-      <button type="button" className="h-9 px-4 rounded-xl bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black" onClick={()=>setShowAdd(true)}>+ Add API</button>
-    </div>
+ return <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-3">
+  <div className="shrink-0 flex items-center justify-end gap-2">
+      <a href="/app/test-api" className="h-9 px-4 rounded-full border border-slate-200 bg-white text-slate-800 text-[12.5px] font-semibold hover:bg-slate-50 inline-flex items-center">Test API</a>
+      <button type="button" className="h-9 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-black" onClick={()=>setShowAdd(v=>!v)}>{showAdd?'Close':'Add API'}</button>
   </div>
 
-  <section><ApiSwitch/></section>
-
-  <section>
-    <h3 className="text-[16px] font-bold text-slate-900 mb-3">Connected APIs</h3>
-    {!apis.length&&<div className="rounded-[22px] border border-dashed border-slate-200 bg-white py-12 text-center text-[13px] text-slate-400">No API yet — add one below.</div>}
-    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-      {apis.map((p:any,i:number)=>{
-        const st=combined(p.id); const activeKey=(p.keys||[]).find((k:any)=>k.isActive); const open=openKeys===p.id; const tr=testRes[p.id];
-        return <div key={p.id} className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-4 flex flex-col">
-          <div className="flex items-start gap-3">
-            <span className="w-11 h-11 rounded-2xl text-white grid place-items-center text-[14px] font-extrabold shrink-0" style={{background:avatars[i%avatars.length]}}>{(p.name||'?').charAt(0)}</span>
-            <div className="min-w-0 flex-1">
-              <p className="font-bold text-slate-900 text-[14.5px] truncate">{p.name.split(' (')[0]}</p>
-              <p className="text-[11.5px] text-slate-400 mt-0.5">{KIND_META[p.kind||'PG']?.l} · {p.code}</p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${p.isMock?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'}`}>{p.isMock?'Sandbox':'Live'}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${p.isActive?'bg-slate-900 text-white':'bg-slate-100 text-slate-500'}`}>{p.isActive?'On':'Off'}</span>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-3">
-            <div className="rounded-2xl bg-[#fdf0ea] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{st?inr(st.total).replace('₹',''):'0'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Total</p></div>
-            <div className="rounded-2xl bg-[#eaf7f0] px-2.5 py-2"><p className="text-[15px] font-bold tnum text-slate-900 leading-none">{st?inr(st.today).replace('₹',''):'0'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Today</p></div>
-            <div className="rounded-2xl bg-[#eef0f6] px-2.5 py-2"><p className={`text-[15px] font-bold tnum leading-none ${st?.rate==null?'text-slate-400':st.rate>=80?'text-emerald-600':'text-amber-600'}`}>{st?.rate==null?'—':st.rate+'%'}</p><p className="text-[10.5px] font-semibold text-slate-500 mt-1">Success</p></div>
-          </div>
-          <p className="text-[11.5px] text-slate-400 mt-2.5 truncate">{activeKey?<>Key <code className="font-mono text-slate-600">{activeKey.masked}</code></>:'No key attached'}</p>
-          {tr&&<p className={`mt-2 text-[11.5px] rounded-xl px-2.5 py-1.5 ${tr.ok?'bg-emerald-50 text-emerald-800':'bg-rose-50 text-rose-700'}`}>{tr.ok?'Connected':'Failed'}{tr.ms?` · ${tr.ms}ms`:''}{tr.note?` · ${tr.note}`:''}</p>}
-          <div className="flex gap-2 mt-3">
-            <button className="flex-1 h-9 rounded-xl border border-slate-200 bg-white text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50" onClick={()=>testConn(p.id)}>Test</button>
-            <button className={`flex-1 h-9 rounded-xl text-[12.5px] font-semibold ${open?'bg-slate-900 text-white':'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`} onClick={()=>setOpenKeys(open?'':p.id)}>Keys ({p.keys?.length||0})</button>
-          </div>
-          {open&&<ProviderKeys prov={p} refresh={()=>qc.invalidateQueries({queryKey:['aprov']})}/>}
-        </div>;
-      })}
-    </div>
-  </section>
-
-  <section>
-    <h3 className="text-[16px] font-bold text-slate-900 mb-3">Add API</h3>
-    {!showAdd?(
-      <button type="button" onClick={()=>setShowAdd(true)} className="w-full rounded-[22px] border border-dashed border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50 transition px-5 py-8 text-center">
-        <p className="text-[15px] font-bold text-slate-800">Add a new API</p>
-        <p className="text-[12.5px] text-slate-400 mt-1">Gateway, wallet or bank — connect without code changes</p>
-      </button>
-    ):(
+  {showAdd&&<section className="shrink-0 max-h-[46%] overflow-auto">
       <div className="bg-white rounded-[22px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] p-5 space-y-5">
         <div>
           <p className="text-[11px] font-bold tracking-[.08em] uppercase text-slate-400 mb-2">Type</p>
@@ -391,9 +348,9 @@ export function AdminProviders(){ const {data}=useQ('aprov','/admin/providers');
           <button className="btn-ghost !rounded-xl" onClick={()=>{setShowAdd(false);setMsg('');}}>Cancel</button>
         </div>
       </div>
-    )}
     {msg&&<p className="mt-3 text-[13px] rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-slate-700">{msg}</p>}
-  </section>
+  </section>}
+  <ApiSwitch/>
  </div>; }
 /** Reports-style pastel KPI boxes for Transactions / Pay-in / Payouts. */
 function SoftStatCards({kind,apiSel='',onApiSel}:{kind?:string;apiSel?:string;onApiSel?:(v:string)=>void}){
