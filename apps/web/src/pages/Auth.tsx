@@ -5,7 +5,7 @@ const msInput="w-full bg-transparent border-0 border-b border-[#8a8886] focus:bo
 const msBtn="bg-[#0067c0] hover:bg-[#005da6] active:bg-[#005494] text-white text-[15px] font-semibold px-8 py-[7px] min-w-[118px] transition-colors disabled:opacity-60";
 const msLink="text-[#0067c0] hover:underline cursor-pointer";
 
-export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<'email'|'password'|'code'>('email'); const [f,setF]=useState({email:'',password:'',totp:''}); const [err,setErr]=useState(''); const [busy,setBusy]=useState(false); const [show,setShow]=useState(false); const codeRefs=useRef<(HTMLInputElement|null)[]>([]);
+export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<'email'|'password'|'code'>('email'); const [f,setF]=useState({email:'',password:'',totp:''}); const [err,setErr]=useState(''); const [busy,setBusy]=useState(false); const codeRefs=useRef<(HTMLInputElement|null)[]>([]);
  const next=(e?:any)=>{ e?.preventDefault(); if(!f.email.includes('@')) return setErr('Enter a valid email address.'); setErr(''); setStep('password'); };
  const submit=async(e:any,body?:any)=>{ e?.preventDefault(); setErr(''); setBusy(true); try{ const r=await api('/auth/login',{method:'POST',body:body||f}); if(r.mfaRequired){ setStep('code'); setBusy(false); return; } nav('/app'); }catch(e:any){ setErr(e.message); setBusy(false); } };
  const setCodeValue=(totp:string)=>{ setF({...f,totp}); if(totp.length===6) submit(undefined,{...f,totp}); };
@@ -27,7 +27,7 @@ export function Login(){ const nav=useNavigate(); const [step,setStep]=useState<
   <div className="inline-flex items-center gap-2 bg-[#f3f2f1] rounded-full pl-1 pr-3 py-1 mb-5 max-w-full"><span className="w-6 h-6 rounded-full bg-[#0067c0] text-white flex items-center justify-center text-[11px] font-semibold shrink-0">{f.email.charAt(0).toUpperCase()}</span><span className="text-[13px] text-[#1b1b1b] truncate">{f.email}</span></div>
   <h1 className="font-display text-[28px] leading-tight font-extrabold tracking-tight text-[#1b1b1b]">Enter password</h1>{err&&<Alert>{err}</Alert>}
   <form onSubmit={submit} className="mt-5 space-y-5">
-   <div><input type={show?'text':'password'} autoFocus autoComplete="current-password" className={msInput} value={f.password} onChange={e=>setF({...f,password:e.target.value})} placeholder="Password"/><label className="flex items-center gap-2 mt-3 text-[13px] text-[#1b1b1b] cursor-pointer select-none"><input type="checkbox" checked={show} onChange={e=>setShow(e.target.checked)} className="w-4 h-4 accent-[#0067c0]"/>Show password</label></div>
+   <div><input type="password" autoFocus autoComplete="current-password" className={msInput} value={f.password} onChange={e=>setF({...f,password:e.target.value})} placeholder="Password"/></div>
    <p className="text-[13px]"><span className={msLink} onClick={()=>setErr('Password reset by email is not set up. Change it from Settings after you sign in, or ask the platform admin.')}>Forgot password?</span></p>
    <div className="flex justify-end pt-1"><button className={msBtn} disabled={busy}>{busy?'Signing in…':'Sign in'}</button></div>
   </form></AuthShell>; }
