@@ -131,15 +131,47 @@ export function Settings(){
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-4 mt-2">
-              <p className="text-[14px] font-semibold text-slate-900">Sessions</p>
-              <p className="text-[12.5px] text-slate-500 mt-0.5">Sign out everywhere if a device is lost or shared.</p>
-              <button type="button" className="mt-3 h-9 px-4 rounded-full border border-rose-200 bg-white text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50" onClick={async()=>{ await api('/auth/revoke-all',{method:'POST',body:{}}); setMsg('All sessions revoked — please log in again'); setTimeout(()=>location.href='/login',1200); }}>Revoke all sessions</button>
-            </div>
+            <SessionsList onMsg={setMsg}/>
           </section>
         </div>
       </div>
     </div>
+  </div>;
+}
+
+function SessionsList({onMsg}:{onMsg:(m:string)=>void}){
+  const qc=useQueryClient();
+  const q=useQuery({queryKey:['auth-sessions'],queryFn:()=>api('/auth/sessions')});
+  const [busy,setBusy]=useState('');
+  const rows:any[]=Array.isArray(q.data)?q.data:[];
+  const kick=async(id:string,current:boolean)=>{
+    setBusy(id);
+    try{
+      const r=await api('/auth/sessions/'+id+'/logout',{method:'POST',body:{}});
+      if(r.current||current){ onMsg('Signed out'); setTimeout(()=>location.href='/login',600); return; }
+      onMsg('Logged out');
+      qc.invalidateQueries({queryKey:['auth-sessions']});
+    }catch(e:any){ onMsg(e.message); }
+    finally{ setBusy(''); }
+  };
+  const when=(d:string)=>{ try{ return new Date(d).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch{ return '—'; } };
+  return <div className="border-t border-slate-100 pt-4 mt-2">
+    <p className="text-[14px] font-semibold text-slate-900">Sessions</p>
+    <p className="text-[12.5px] text-slate-500 mt-0.5">Where this account is signed in.</p>
+    <div className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
+      {q.isLoading&&<p className="py-4 text-[13px] text-slate-400">Loading…</p>}
+      {!q.isLoading&&!rows.length&&<p className="py-4 text-[13px] text-slate-400">No active sessions.</p>}
+      {rows.map(s=>(
+        <div key={s.id} className="flex items-center gap-3 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-semibold text-slate-900 truncate">{s.device}{s.current&&<span className="ml-2 rounded-full bg-emerald-50 text-emerald-700 text-[10.5px] font-bold px-2 py-0.5">This device</span>}</p>
+            <p className="text-[12px] text-slate-400 mt-0.5 truncate">{s.ip} · signed in {when(s.signedInAt)}</p>
+          </div>
+          <button type="button" disabled={busy===s.id} onClick={()=>kick(s.id,!!s.current)} className="shrink-0 h-8 px-3 rounded-full border border-slate-200 bg-white text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{busy===s.id?'…':'Log out'}</button>
+        </div>
+      ))}
+    </div>
+    {rows.length>1&&<button type="button" className="mt-3 h-9 px-4 rounded-full border border-rose-200 bg-white text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50" onClick={async()=>{ await api('/auth/revoke-all',{method:'POST',body:{}}); onMsg('All sessions revoked — please log in again'); setTimeout(()=>location.href='/login',1200); }}>Revoke all sessions</button>}
   </div>;
 }
 
