@@ -19,7 +19,6 @@ export function MerchantDesk() {
           <button type="button" onClick={() => setAdding(true)} className="ml-auto h-9 px-4 rounded-full bg-slate-900 text-white text-[13px] font-semibold">Add new merchant</button>
         </div>
         {adding && <AddMerchant onDone={() => { qc.invalidateQueries({ queryKey: ['merchant-desk'] }); setAdding(false); }} onCancel={() => setAdding(false)} />}
-        {managing && <ManageMerchant merchant={managing} onClose={() => setManageId(null)} onSaved={() => qc.invalidateQueries({ queryKey: ['merchant-desk'] })} />}
         <div className="flex-1 min-h-0 overflow-auto">
           {list.isLoading && <p className="px-5 py-8 text-[13px] text-slate-400">Loading…</p>}
           {!list.isLoading && !rows.length && !adding && <p className="px-5 py-16 text-center text-[13px] text-slate-400">No merchants yet.</p>}
@@ -57,6 +56,7 @@ export function MerchantDesk() {
           )}
         </div>
       </div>
+      {managing && <ManageMerchant merchant={managing} onClose={() => setManageId(null)} onSaved={() => qc.invalidateQueries({ queryKey: ['merchant-desk'] })} />}
     </div>
   );
 }
@@ -119,27 +119,33 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
         });
       }
     },
-    onSuccess: () => { setErr(''); setOk('Saved'); setForm({ ...form, password: '' }); onSaved(); setTimeout(() => setOk(''), 1600); },
+    onSuccess: () => { setErr(''); setOk('Saved'); setForm({ ...form, password: '' }); onSaved(); setTimeout(onClose, 700); },
     onError: (e: any) => setErr(e.message || 'Could not save'),
   });
   return (
-    <form className="shrink-0 px-5 py-4 border-b border-slate-100 bg-[#fafbfd]" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[13.5px] font-bold text-slate-900">Manage · {merchant.businessName || 'Merchant'}</p>
-        <button type="button" onClick={onClose} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-600">Close</button>
-      </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="block"><span className="label">Name</span><input className="input !w-44" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
-        <label className="block"><span className="label">Email</span><input className="input !w-52" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
-        <label className="block"><span className="label">Pay-in %</span><input className="input tnum !w-24" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
-        <label className="block"><span className="label">Payout %</span><input className="input tnum !w-24" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></label>
-        <label className="block"><span className="label">Hold ₹</span><input className="input tnum !w-28" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></label>
-        <label className="block"><span className="label">New password</span><input className="input !w-40" type="text" minLength={8} placeholder="Leave blank" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></label>
-        <button className="h-10 px-4 rounded-full bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
-        {ok && <span className="text-[12px] font-semibold text-emerald-700 pb-2">{ok}</span>}
-      </div>
-      {err && <p className="text-[12.5px] text-rose-600 mt-2">{err}</p>}
-    </form>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/40" />
+      <form className="relative w-full max-w-lg bg-white rounded-[20px] shadow-[0_20px_50px_rgba(15,23,42,.25)] p-5 sm:p-6" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[16px] font-bold text-slate-900">Edit · {merchant.businessName || 'Merchant'}</p>
+          <button type="button" onClick={onClose} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-600">Close</button>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block"><span className="label">Name</span><input className="input" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
+          <label className="block"><span className="label">Email</span><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
+          <label className="block"><span className="label">Pay-in %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
+          <label className="block"><span className="label">Payout %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></label>
+          <label className="block"><span className="label">Hold ₹</span><input className="input tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></label>
+          <label className="block"><span className="label">New password</span><input className="input" type="text" minLength={8} placeholder="Leave blank" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></label>
+        </div>
+        {err && <p className="text-[12.5px] text-rose-600 mt-3">{err}</p>}
+        {ok && <p className="text-[12.5px] text-emerald-700 mt-3">{ok}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="h-10 px-4 rounded-full border border-slate-200 text-[13px] font-semibold text-slate-600">Cancel</button>
+          <button className="h-10 px-5 rounded-full bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
