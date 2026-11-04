@@ -42,7 +42,7 @@ export function MerchantDesk() {
                     <td className="px-5 py-3.5 tnum text-slate-700">{inr(m.payoutPaise)}</td>
                     <td className="px-5 py-3.5 tnum font-semibold text-slate-900">{inr(Number(m.payinPaise || 0) + Number(m.payoutPaise || 0))}</td>
                     <td className="px-5 py-3.5 tnum text-slate-700">{m.payinChargePercent ?? 0}% / {m.payoutChargePercent ?? 0}%</td>
-                    <td className="px-5 py-3.5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${m.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{m.active ? 'Active' : 'Inactive'}</span></td>
+                    <td className="px-5 py-3.5"><StatusToggle merchant={m} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -51,6 +51,32 @@ export function MerchantDesk() {
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusToggle({ merchant }: { merchant: any }) {
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: () => api('/merchant-desk/' + merchant.id + '/profile', {
+      method: 'POST',
+      body: {
+        businessName: merchant.businessName || 'Merchant',
+        email: merchant.email || merchant.loginEmail || '',
+        payinChargePercent: String(merchant.payinChargePercent ?? 0),
+        payoutChargePercent: String(merchant.payoutChargePercent ?? 0),
+        holdRupees: String((merchant.holdPaise || 0) / 100),
+        active: !merchant.active,
+      },
+    }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['merchant-desk'] }),
+  });
+  return (
+    <button type="button" disabled={save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2" title={merchant.active ? 'Turn off' : 'Turn on'}>
+      <span className={`text-[12px] font-semibold ${merchant.active ? 'text-emerald-700' : 'text-slate-400'}`}>{save.isPending ? '…' : merchant.active ? 'Active' : 'Inactive'}</span>
+      <span className={`relative w-10 h-6 rounded-full ${merchant.active ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow ${merchant.active ? 'left-[18px]' : 'left-0.5'}`} />
+      </span>
+    </button>
   );
 }
 
