@@ -48,7 +48,7 @@ export function MerchantDesk() {
                     <td className="px-5 py-3.5 tnum text-slate-700">{m.payinChargePercent ?? 0}% / {m.payoutChargePercent ?? 0}%</td>
                     <td className="px-5 py-3.5"><StatusToggle merchant={m} /></td>
                     <td className="px-5 py-3.5 text-right">
-                      <button type="button" onClick={() => { setAdding(false); setManageId(m.id); }} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">Manage</button>
+                      <button type="button" onClick={() => { setAdding(false); setManageId(m.id); }} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
                     </td>
                   </tr>
                 ))}
