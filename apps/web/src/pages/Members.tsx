@@ -94,32 +94,22 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
     payinChargePercent: String(merchant.payinChargePercent ?? 0),
     payoutChargePercent: String(merchant.payoutChargePercent ?? 0),
     holdRupees: String((merchant.holdPaise || 0) / 100),
-    password: '',
-    mobile: merchant.loginPhone || '',
   });
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const save = useMutation({
-    mutationFn: async () => {
-      await api('/merchant-desk/' + merchant.id + '/profile', {
-        method: 'POST',
-        body: {
-          businessName: form.businessName,
-          email: form.email,
-          payinChargePercent: form.payinChargePercent,
-          payoutChargePercent: form.payoutChargePercent,
-          holdRupees: form.holdRupees,
-          active: !!merchant.active,
-        },
-      });
-      if (form.password) {
-        await api('/merchant-desk/' + merchant.id + '/login', {
-          method: 'POST',
-          body: { email: form.email, mobile: form.mobile, password: form.password },
-        });
-      }
-    },
-    onSuccess: () => { setErr(''); setOk('Saved'); setForm({ ...form, password: '' }); onSaved(); setTimeout(onClose, 700); },
+    mutationFn: () => api('/merchant-desk/' + merchant.id + '/profile', {
+      method: 'POST',
+      body: {
+        businessName: form.businessName,
+        email: form.email,
+        payinChargePercent: form.payinChargePercent,
+        payoutChargePercent: form.payoutChargePercent,
+        holdRupees: form.holdRupees,
+        active: !!merchant.active,
+      },
+    }),
+    onSuccess: () => { setErr(''); setOk('Saved'); onSaved(); setTimeout(onClose, 700); },
     onError: (e: any) => setErr(e.message || 'Could not save'),
   });
   return (
@@ -136,7 +126,7 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
           <label className="block"><span className="label">Pay-in %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
           <label className="block"><span className="label">Payout %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></label>
           <label className="block"><span className="label">Hold ₹</span><input className="input tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></label>
-          <label className="block"><span className="label">New password</span><input className="input" type="text" minLength={8} placeholder="Leave blank" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></label>
+          <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.loginPassword || '—'} /></label>
         </div>
         {err && <p className="text-[12.5px] text-rose-600 mt-3">{err}</p>}
         {ok && <p className="text-[12.5px] text-emerald-700 mt-3">{ok}</p>}

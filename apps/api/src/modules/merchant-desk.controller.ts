@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
 import { AuthGuard, Perm, StaffGuard } from '../common/guards';
+import { encryptSecret, decryptSecret } from '../common/core';
 import { LedgerService, acct } from './ledger.service';
 
 function rupees(v: unknown) {
@@ -70,7 +71,7 @@ export class MerchantDeskController {
     return { ...m, org };
   }
 
-  private async ensureLogin(orgId: string, b: any, fallbackEmail?: string | null) {
+  private async ensureLogin(orgId: string, merchantId: string, b: any, fallbackEmail?: string | null) {
     const email = String(b.email || fallbackEmail || '').trim().toLowerCase();
     const mobile = String(b.mobile || b.phone || '').replace(/\D/g, '').slice(-10);
     const password = String(b.password || '');
@@ -85,16 +86,19 @@ export class MerchantDeskController {
         data: { email, ...(mobile.length === 10 ? { phone: mobile } : {}), passwordHash: await bcrypt.hash(password, 12), tokenVersion: { increment: 1 }, isActive: true },
       });
       await this.p.session.updateMany({ where: { userId: membership.userId, revokedAt: null }, data: { revokedAt: new Date() } });
-      return;
+    } else {
+      const u = await this.p.user.create({ data: { email, phone: mobile.length === 10 ? mobile : null, passwordHash: await bcrypt.hash(password, 12), isActive: true } });
+      await this.p.membership.create({ data: { userId: u.id, orgId, role: 'MERCHANT_OWNER' } });
     }
-    const u = await this.p.user.create({ data: { email, phone: mobile.length === 10 ? mobile : null, passwordHash: await bcrypt.hash(password, 12), isActive: true } });
-    await this.p.membership.create({ data: { userId: u.id, orgId, role: 'MERCHANT_OWNER' } });
+    await this.p.merchantProfile.update({ where: { id: merchantId }, data: { loginPasswordEnc: encryptSecret(password) } });
   }
 
   private async viewMerchant(m: any, wallet: { payinPaise: number; payoutPaise: number; holdPaise: number; freePayinPaise: number }) {
     m = await this.withOrg(m);
     const owner = (m.org?.memberships || []).find((x: any) => x.role === 'MERCHANT_OWNER') || (m.org?.memberships || [])[0];
     const login = owner?.user;
+    let loginPassword = '';
+    if (m.loginPasswordEnc) { try { loginPassword = decryptSecret(m.loginPasswordEnc); } catch { loginPassword = ''; } }
     return {
       id: m.id,
       businessName: m.businessName || '',
@@ -111,6 +115,7 @@ export class MerchantDeskController {
       loginEmail: login?.email || '',
       loginPhone: login?.phone || '',
       loginActive: login ? !!login.isActive : false,
+      loginPassword,
       ...(await this.chargePercents(m)),
       ...wallet,
     };
@@ -169,7 +174,7 @@ export class MerchantDeskController {
     await this.p.portalMember.create({
       data: { merchantId: row.id, name, mobile, email: email || null, status: 'ACTIVE' },
     });
-    await this.ensureLogin(org.id, { ...b, email, mobile }, email);
+    await this.ensureLogin(org.id, row.id, { ...b, email, mobile }, email);
     const memberCount = 1;
     return await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }
@@ -201,7 +206,7 @@ export class MerchantDeskController {
   @Perm('merchant:write')
   async setLogin(@Param('merchantId') merchantId: string, @Body() b: any) {
     const m = await this.merchant(merchantId);
-    await this.ensureLogin(m.orgId, b, m.email);
+    await this.ensureLogin(m.orgId, m.id, b, m.email);
     if (String(b.email || '').includes('@')) {
       await this.p.merchantProfile.update({ where: { id: m.id }, data: { email: String(b.email).trim().toLowerCase() } });
     }

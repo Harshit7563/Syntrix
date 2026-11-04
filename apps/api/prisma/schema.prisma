@@ -143,6 +143,8 @@ model MerchantProfile {
   /// Null means use a commission slab or the older pricing plan.
   payinChargeBps             Int?
   payoutChargeBps            Int?
+  /// Encrypted copy of the merchant portal password so staff can show it.
+  loginPasswordEnc           String?
   directors                  Director[]
   owners                     BeneficialOwner[]
   bankAccounts               BankAccount[]
