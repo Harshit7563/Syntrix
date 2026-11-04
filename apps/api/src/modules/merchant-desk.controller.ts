@@ -123,7 +123,13 @@ export class MerchantDeskController {
         skipDuplicates: true,
       });
     }
-    return await this.viewMerchant({ ...row, _count: { members: 0 } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+    const mobile = String(b.mobile || '').replace(/\D/g, '').slice(-10);
+    if (mobile.length !== 10) throw new BadRequestException('A 10-digit mobile is required so this member can transact');
+    await this.p.portalMember.create({
+      data: { merchantId: row.id, name, mobile, email: email || null, status: 'ACTIVE' },
+    });
+    const memberCount = 1;
+    return await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }
 
   @Post(':merchantId/profile')
@@ -251,8 +257,21 @@ export class MerchantDeskController {
     await this.merchant(merchantId);
     const providers = await this.p.provider.findMany({ where: { isActive: true }, select: { id: true, name: true, code: true, isMock: true }, orderBy: { name: 'asc' } });
     const rules = await this.p.routingRule.findMany({ where: { merchantId, productCode: { in: ['PAYIN', 'PAYOUT'] } } });
+    const platform = await this.p.routingRule.findMany({ where: { merchantId: null, isActive: true, productCode: { in: ['PAYIN', 'PAYOUT'] } } });
+    const nameOf = (id?: string | null) => {
+      const p = providers.find(x => x.id === id);
+      return p ? String(p.name || '').split(' (')[0] : '';
+    };
+    const using = (pc: 'PAYIN' | 'PAYOUT') => {
+      const own = rules.find(r => r.productCode === pc && r.isActive);
+      if (own) return { productCode: pc, providerId: own.providerId, name: nameOf(own.providerId), source: 'member' as const };
+      const plat = platform.find(r => r.productCode === pc);
+      if (plat) return { productCode: pc, providerId: plat.providerId, name: nameOf(plat.providerId), source: 'platform' as const };
+      return { productCode: pc, providerId: null, name: '', source: 'none' as const };
+    };
     return {
-      mode: rules.length ? 'merchant' : 'platform',
+      mode: rules.some(r => r.isActive) ? 'merchant' : 'platform',
+      using: { PAYIN: using('PAYIN'), PAYOUT: using('PAYOUT') },
       providers,
       rules: rules.map(r => ({ id: r.id, productCode: r.productCode, providerId: r.providerId, isActive: r.isActive })),
     };
@@ -267,9 +286,16 @@ export class MerchantDeskController {
     if (!prov || !prov.isActive) throw new BadRequestException('Select an active API');
     const active = !!b.active;
     const ex = await this.p.routingRule.findFirst({ where: { merchantId, productCode, providerId: prov.id } });
+    if (!active) {
+      if (ex) await this.p.routingRule.delete({ where: { id: ex.id } });
+      const leftover = await this.p.routingRule.count({ where: { merchantId, productCode, isActive: true } });
+      if (!leftover) await this.p.routingRule.deleteMany({ where: { merchantId, productCode } });
+      return { productCode, providerId: prov.id, isActive: false };
+    }
     const rule = ex
-      ? await this.p.routingRule.update({ where: { id: ex.id }, data: { isActive: active } })
-      : await this.p.routingRule.create({ data: { merchantId, productCode, providerId: prov.id, isActive: active, priority: 1 } });
-    return { id: rule.id, productCode, providerId: prov.id, isActive: rule.isActive };
+      ? await this.p.routingRule.update({ where: { id: ex.id }, data: { isActive: true, priority: 1 } })
+      : await this.p.routingRule.create({ data: { merchantId, productCode, providerId: prov.id, isActive: true, priority: 1 } });
+    await this.p.routingRule.updateMany({ where: { merchantId, productCode, id: { not: rule.id } }, data: { isActive: false } });
+    return { id: rule.id, productCode, providerId: prov.id, isActive: true };
   }
 }

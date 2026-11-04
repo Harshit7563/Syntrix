@@ -35,7 +35,7 @@ function Shell(){
     ['/app/reports','Reports',I.chart],
     ['/app/providers','APIs',I.shield],
     ['/app/logs','Logs',I.doc],
-    ['/app/merchants','Merchant',I.users],
+    ['/app/merchants','Members',I.users],
     ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
   ]:[
@@ -59,7 +59,7 @@ function Shell(){
     ['/app/reports','Reports'],
     ['/app/providers','APIs'],
     ['/app/logs','Logs'],
-    ['/app/merchants','Merchant'],
+    ['/app/merchants','Members'],
     ['/app/playground','Docs'],
     ['/app/settings','Settings'],
   ]:[
