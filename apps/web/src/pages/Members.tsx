@@ -34,7 +34,7 @@ export function MerchantDesk() {
                   <th className="px-5 py-3 font-semibold">Wallet</th>
                   <th className="px-5 py-3 font-semibold">Charge</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
-                  <th className="px-5 py-3 font-semibold">Manage</th>
+                  <th className="px-5 py-3 font-semibold text-center">Manage</th>
                 </tr>
               </thead>
               <tbody>
@@ -47,7 +47,7 @@ export function MerchantDesk() {
                     <td className="px-5 py-3.5 tnum font-semibold text-slate-900">{inr(Number(m.payinPaise || 0) + Number(m.payoutPaise || 0))}</td>
                     <td className="px-5 py-3.5 tnum text-slate-700">{m.payinChargePercent ?? 0}% / {m.payoutChargePercent ?? 0}%</td>
                     <td className="px-5 py-3.5"><StatusToggle merchant={m} /></td>
-                    <td className="px-5 py-3.5 text-right">
+                    <td className="px-5 py-3.5 text-center">
                       <button type="button" onClick={() => { setAdding(false); setManageId(m.id); }} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
                     </td>
                   </tr>
