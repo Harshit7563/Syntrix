@@ -19,9 +19,23 @@ async function retireDemoPassword(p:PrismaService, userId:string){ await p.user.
 @ApiTags('auth') @Controller('auth') export class AuthController { constructor(private p: PrismaService){}
  @Post('register') async register(@Body() b:any, @Req() req:any, @Res({passthrough:true}) res:any){ if(process.env.ALLOW_PUBLIC_REGISTER!=='true') throw new ForbiddenException('Account signup is closed.'); if(!b.email||!b.password||b.password.length<10) throw new BadRequestException('Email and a 10+ character password are required'); const email=String(b.email).trim().toLowerCase(); if(await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}})) throw new BadRequestException('An account with this email already exists — try logging in');
   const user=await this.p.$transaction(async tx=>{ const u=await tx.user.create({data:{email,phone:b.phone,passwordHash:await bcrypt.hash(b.password,12)}}); const org=await tx.organization.create({data:{name:b.businessName||'My Business'}}); await tx.membership.create({data:{userId:u.id,orgId:org.id,role:'MERCHANT_OWNER'}}); await tx.merchantProfile.create({data:{orgId:org.id,businessName:b.businessName}}); return u; }); return this.issue(user,res,req); }
- @Post('login') async login(@Body() _b:any, @Req() req:any, @Res({passthrough:true}) res:any){
-  // TEMP: email, password, MFA, and login rate-limit are off. Opening the first SUPER_ADMIN session.
-  // Restore email/password + totp checks from git history before locking login again.
+ @Post('login') async login(@Body() b:any, @Req() req:any, @Res({passthrough:true}) res:any){
+  const raw=String(b.email||b.mobile||'').trim();
+  const password=String(b.password||'');
+  const email=raw.toLowerCase();
+  const mobile=raw.replace(/\D/g,'').slice(-10);
+  if(raw||password){
+    const ip=clientIp(req);
+    if(overLoginLimit('ip:'+ip)||(email&&overLoginLimit('email:'+email))) throw new HttpException('Too many login attempts. Only 2 attempts are allowed per minute.',429);
+    const mark=()=>{ recordLogin('ip:'+ip); if(email) recordLogin('email:'+email); };
+    let u:any=null;
+    if(raw.includes('@')) u=await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}});
+    else if(mobile.length===10) u=await this.p.user.findFirst({where:{phone:mobile}});
+    if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ mark(); throw new UnauthorizedException('Invalid email or password'); }
+    mark();
+    await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}}); return this.issue(u,res,req);
+  }
+  // TEMP: empty body still opens admin. Member login uses email/mobile + password above.
   const u=await this.p.user.findFirst({where:{isActive:true,memberships:{some:{role:'SUPER_ADMIN'}}},orderBy:{createdAt:'asc'}});
   if(!u) throw new UnauthorizedException('No admin account to open');
   await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}}); return this.issue(u,res,req); }

@@ -79,17 +79,22 @@ function Workspace({ merchant, onSaved }: { merchant: any; onSaved: () => void }
         </div>
 
         <section>
-          <Head title="1. Charge" sub="Jo % is member se katna hai." />
+          <Head title="1. Login" sub="Member isse https://syntrixapi.in/login pe aayega." />
+          <LoginBlock merchant={merchant} onSaved={onSaved} />
+        </section>
+
+        <section>
+          <Head title="2. Charge" sub="Jo % is member se katna hai." />
           <ChargeForm merchant={merchant} onSaved={onSaved} />
         </section>
 
         <section>
-          <Head title="2. API" sub="Pehle APIs page pe integrate karo. Yahan is member ko do." />
+          <Head title="3. API" sub="Pehle APIs page pe integrate karo. Yahan is member ko do." />
           <ApiBlock merchantId={merchant.id} />
         </section>
 
         <section>
-          <Head title="3. Who transacts" sub="Pay-in / payout isi naam pe chalegi." />
+          <Head title="4. Who transacts" sub="Pay-in / payout isi naam pe chalegi." />
           <MemberBlock merchantId={merchant.id} onChange={onSaved} />
         </section>
 
@@ -145,7 +150,7 @@ function ActiveToggle({ merchant, onSaved }: { merchant: any; onSaved: () => voi
 }
 
 function GiveMember({ onDone, onCancel }: { onDone: (id: string) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({ businessName: '', mobile: '', email: '', payinChargePercent: '2', payoutChargePercent: '2' });
+  const [form, setForm] = useState({ businessName: '', mobile: '', email: '', password: '', payinChargePercent: '2', payoutChargePercent: '2' });
   const [err, setErr] = useState('');
   const save = useMutation({
     mutationFn: () => api('/merchant-desk', { method: 'POST', body: { ...form, holdRupees: '0', active: true } }),
@@ -158,11 +163,12 @@ function GiveMember({ onDone, onCancel }: { onDone: (id: string) => void; onCanc
         <h2 className="text-[17px] font-bold text-slate-900">Give a member</h2>
         <button type="button" onClick={onCancel} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-600">Cancel</button>
       </div>
-      <p className="text-[13px] text-slate-400 mb-5 max-w-xl">Name + mobile do. Charge set karo. Platform API (ORVIAN) unke transactions pe lag jaayegi.</p>
+      <p className="text-[13px] text-slate-400 mb-5 max-w-xl">Email + password se member login karega. Charge set karo. Platform API unke transactions pe lag jaayegi.</p>
       <div className="grid md:grid-cols-2 gap-4 max-w-xl">
         <Field label="Name"><input className="input" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></Field>
         <Field label="Mobile"><input className="input tnum" inputMode="numeric" maxLength={10} placeholder="10 digits" value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} required /></Field>
-        <Field label="Email"><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></Field>
+        <Field label="Login email"><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required /></Field>
+        <Field label="Login password"><input className="input" type="text" minLength={8} placeholder="Min 8 characters" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Pay-in %"><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></Field>
           <Field label="Payout %"><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></Field>
@@ -176,6 +182,28 @@ function GiveMember({ onDone, onCancel }: { onDone: (id: string) => void; onCanc
 
 function Field({ label, children }: { label: string; children: any }) {
   return <div><label className="label">{label}</label>{children}</div>;
+}
+
+function LoginBlock({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {
+  const [form, setForm] = useState({ email: merchant.loginEmail || merchant.email || '', password: '', mobile: merchant.loginPhone || '' });
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const save = useMutation({
+    mutationFn: () => api('/merchant-desk/' + merchant.id + '/login', { method: 'POST', body: form }),
+    onSuccess: () => { setErr(''); setOk(merchant.hasLogin ? 'Password updated' : 'Login created'); setForm({ ...form, password: '' }); onSaved(); setTimeout(() => setOk(''), 1800); },
+    onError: (e: any) => setErr(e.message || 'Could not save login'),
+  });
+  return (
+    <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      {merchant.hasLogin && <p className="w-full text-[13px] text-slate-600">Login: <span className="font-semibold text-slate-900">{merchant.loginEmail}</span>{merchant.loginPhone ? ` · ${merchant.loginPhone}` : ''} · syntrixapi.in/login</p>}
+      <Field label="Email"><input className="input !w-52" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required /></Field>
+      <Field label="Mobile"><input className="input tnum !w-36" inputMode="numeric" maxLength={10} value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} /></Field>
+      <Field label={merchant.hasLogin ? 'New password' : 'Password'}><input className="input !w-44" type="text" minLength={8} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required /></Field>
+      <button className="h-10 px-4 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : merchant.hasLogin ? 'Reset password' : 'Create login'}</button>
+      {ok && <span className="text-[12px] font-semibold text-emerald-700 pb-2">{ok}</span>}
+      {err && <p className="w-full text-[12.5px] text-rose-600">{err}</p>}
+    </form>
+  );
 }
 
 function ChargeForm({ merchant, onSaved }: { merchant: any; onSaved: () => void }) {

@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
 import { AuthGuard, Perm, StaffGuard } from '../common/guards';
 import { LedgerService, acct } from './ledger.service';
@@ -63,7 +64,37 @@ export class MerchantDeskController {
     return { payinChargePercent: payin ?? 0, payoutChargePercent: payout ?? 0 };
   }
 
+  private async withOrg(m: any) {
+    if (m?.org?.memberships) return m;
+    const org = await this.p.organization.findUnique({ where: { id: m.orgId }, include: this.orgLoginInclude() });
+    return { ...m, org };
+  }
+
+  private async ensureLogin(orgId: string, b: any, fallbackEmail?: string | null) {
+    const email = String(b.email || fallbackEmail || '').trim().toLowerCase();
+    const mobile = String(b.mobile || b.phone || '').replace(/\D/g, '').slice(-10);
+    const password = String(b.password || '');
+    if (!email.includes('@')) throw new BadRequestException('Email is required for member login');
+    if (password.length < 8) throw new BadRequestException('Login password must be at least 8 characters');
+    const taken = await this.p.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    const membership = await this.p.membership.findFirst({ where: { orgId, role: 'MERCHANT_OWNER' } });
+    if (taken && (!membership || taken.id !== membership.userId)) throw new BadRequestException('This email already has a login');
+    if (membership) {
+      await this.p.user.update({
+        where: { id: membership.userId },
+        data: { email, ...(mobile.length === 10 ? { phone: mobile } : {}), passwordHash: await bcrypt.hash(password, 12), tokenVersion: { increment: 1 }, isActive: true },
+      });
+      await this.p.session.updateMany({ where: { userId: membership.userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      return;
+    }
+    const u = await this.p.user.create({ data: { email, phone: mobile.length === 10 ? mobile : null, passwordHash: await bcrypt.hash(password, 12), isActive: true } });
+    await this.p.membership.create({ data: { userId: u.id, orgId, role: 'MERCHANT_OWNER' } });
+  }
+
   private async viewMerchant(m: any, wallet: { payinPaise: number; payoutPaise: number; holdPaise: number; freePayinPaise: number }) {
+    m = await this.withOrg(m);
+    const owner = (m.org?.memberships || []).find((x: any) => x.role === 'MERCHANT_OWNER') || (m.org?.memberships || [])[0];
+    const login = owner?.user;
     return {
       id: m.id,
       businessName: m.businessName || '',
@@ -76,15 +107,23 @@ export class MerchantDeskController {
       sandboxEnabled: m.sandboxEnabled,
       productionEnabled: m.productionEnabled,
       memberCount: m._count?.members ?? 0,
+      hasLogin: !!login,
+      loginEmail: login?.email || '',
+      loginPhone: login?.phone || '',
+      loginActive: login ? !!login.isActive : false,
       ...(await this.chargePercents(m)),
       ...wallet,
     };
   }
 
+  private orgLoginInclude() {
+    return { memberships: { include: { user: { select: { id: true, email: true, phone: true, isActive: true } } } } };
+  }
+
   @Get()
   @Perm('merchant:read')
   async list() {
-    const rows = await this.p.merchantProfile.findMany({ orderBy: { createdAt: 'asc' }, include: { _count: { select: { members: true } } } });
+    const rows = await this.p.merchantProfile.findMany({ orderBy: { createdAt: 'asc' }, include: { _count: { select: { members: true } }, org: { include: this.orgLoginInclude() } } });
     const out = [];
     for (const m of rows) out.push(await this.viewMerchant(m, await this.walletOf(m.id, Number(m.walletHoldPaise || 0))));
     return out;
@@ -94,9 +133,11 @@ export class MerchantDeskController {
   @Perm('merchant:write')
   async create(@Body() b: any) {
     const name = String(b.businessName || '').trim();
-    const email = String(b.email || '').trim();
+    const email = String(b.email || '').trim().toLowerCase();
     if (name.length < 2) throw new BadRequestException('Merchant name is required');
-    if (email && !email.includes('@')) throw new BadRequestException('Email is not valid');
+    if (!email.includes('@')) throw new BadRequestException('Email is required for member login');
+    if (String(b.password || '').length < 8) throw new BadRequestException('Login password must be at least 8 characters');
+    if (await this.p.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })) throw new BadRequestException('This email already has a login');
     const active = b.active !== false;
     const org = await this.p.organization.create({ data: { name, type: 'MERCHANT' } });
     const row = await this.p.merchantProfile.create({
@@ -128,6 +169,7 @@ export class MerchantDeskController {
     await this.p.portalMember.create({
       data: { merchantId: row.id, name, mobile, email: email || null, status: 'ACTIVE' },
     });
+    await this.ensureLogin(org.id, { ...b, email, mobile }, email);
     const memberCount = 1;
     return await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }
@@ -153,6 +195,18 @@ export class MerchantDeskController {
     });
     await this.p.organization.update({ where: { id: m.orgId }, data: { name } });
     return await this.viewMerchant(row, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+  }
+
+  @Post(':merchantId/login')
+  @Perm('merchant:write')
+  async setLogin(@Param('merchantId') merchantId: string, @Body() b: any) {
+    const m = await this.merchant(merchantId);
+    await this.ensureLogin(m.orgId, b, m.email);
+    if (String(b.email || '').includes('@')) {
+      await this.p.merchantProfile.update({ where: { id: m.id }, data: { email: String(b.email).trim().toLowerCase() } });
+    }
+    const fresh = await this.p.merchantProfile.findUniqueOrThrow({ where: { id: m.id }, include: { _count: { select: { members: true } }, org: { include: this.orgLoginInclude() } } });
+    return this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
   }
 
   @Get(':merchantId/wallet')
