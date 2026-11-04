@@ -42,7 +42,7 @@ export function Settings(){
   const savePassword=async()=>{
     if(!curPw||!newPw) return setMsg('Enter both passwords');
     setBusy('pw');
-    try{ const r=await api('/auth/change-password',{method:'POST',body:{currentPassword:curPw,newPassword:newPw}}); setMsg(r.message); setTimeout(()=>location.href='/Merchant',1500); }
+    try{ const r=await api('/auth/change-password',{method:'POST',body:{currentPassword:curPw,newPassword:newPw}}); setMsg(r.message); setTimeout(()=>location.href='/app/merchants/login',1500); }
     catch(e:any){ setMsg(e.message); }
     finally{ setBusy(''); }
   };
@@ -56,7 +56,7 @@ export function Settings(){
         <h1 className="text-[22px] font-bold tracking-tight text-slate-900">Settings</h1>
         <p className="text-[13px] text-slate-400 mt-0.5">Account, security, and sign-in</p>
       </div>
-      <button type="button" className="h-9 px-4 rounded-full border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 hover:bg-slate-50" onClick={async()=>{ await api('/auth/logout',{method:'POST',body:{}}); location.href='/Merchant'; }}>Sign out</button>
+      <button type="button" className="h-9 px-4 rounded-full border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 hover:bg-slate-50" onClick={async()=>{ await api('/auth/logout',{method:'POST',body:{}}); location.href='/app/merchants/login'; }}>Sign out</button>
     </div>
 
     {msg&&<div className="shrink-0"><Alert>{msg}</Alert></div>}
@@ -148,7 +148,7 @@ function SessionsList({onMsg}:{onMsg:(m:string)=>void}){
     setBusy(id);
     try{
       const r=await api('/auth/sessions/'+id+'/logout',{method:'POST',body:{}});
-      if(r.current||current){ onMsg('Signed out'); setTimeout(()=>location.href='/Merchant',600); return; }
+      if(r.current||current){ onMsg('Signed out'); setTimeout(()=>location.href='/app/merchants/login',600); return; }
       onMsg('Logged out');
       qc.invalidateQueries({queryKey:['auth-sessions']});
     }catch(e:any){ onMsg(e.message); }
@@ -171,7 +171,7 @@ function SessionsList({onMsg}:{onMsg:(m:string)=>void}){
         </div>
       ))}
     </div>
-    {rows.length>1&&<button type="button" className="mt-3 h-9 px-4 rounded-full border border-rose-200 bg-white text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50" onClick={async()=>{ await api('/auth/revoke-all',{method:'POST',body:{}}); onMsg('All sessions revoked — please log in again'); setTimeout(()=>location.href='/Merchant',1200); }}>Revoke all sessions</button>}
+    {rows.length>1&&<button type="button" className="mt-3 h-9 px-4 rounded-full border border-rose-200 bg-white text-[12.5px] font-semibold text-rose-600 hover:bg-rose-50" onClick={async()=>{ await api('/auth/revoke-all',{method:'POST',body:{}}); onMsg('All sessions revoked — please log in again'); setTimeout(()=>location.href='/app/merchants/login',1200); }}>Revoke all sessions</button>}
   </div>;
 }
 

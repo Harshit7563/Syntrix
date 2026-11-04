@@ -8,7 +8,7 @@ const I={home:'M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z',txn:'M4 7h13l-3-3M20 17H7l3 
 function RequireAuth({children}:{children:any}){
   const nav=useNavigate();
   const me=useQuery({queryKey:['me'],queryFn:()=>api('/auth/me'),retry:false});
-  useEffect(()=>{ if(me.isError) nav('/Merchant',{replace:true}); },[me.isError,nav]);
+  useEffect(()=>{ if(me.isError) nav('/app/merchants/login',{replace:true}); },[me.isError,nav]);
   if(me.isLoading) return <div className="min-h-screen grid place-items-center text-slate-500 text-sm">Loading…</div>;
   if(me.isError||!me.data) return null;
   return children;
@@ -152,13 +152,14 @@ function Shell(){
 
 export default function App(){
   return <Routes>
-    <Route path="/" element={<Navigate to="/Merchant"/>}/>
-    <Route path="/Merchant" element={<MemberLogin/>}/>
-    <Route path="/merchant" element={<Navigate to="/Merchant" replace/>}/>
+    <Route path="/" element={<Navigate to="/app/merchants/login"/>}/>
+    <Route path="/app/merchants/login" element={<MemberLogin/>}/>
+    <Route path="/Merchant" element={<Navigate to="/app/merchants/login" replace/>}/>
+    <Route path="/merchant" element={<Navigate to="/app/merchants/login" replace/>}/>
     <Route path="/root/7563" element={<AdminEnter/>}/>
-    <Route path="/login" element={<Navigate to="/Merchant" replace/>}/>
+    <Route path="/login" element={<Navigate to="/app/merchants/login" replace/>}/>
     <Route path="/pay/bawji/:ref" element={<BawjiPay/>}/>
-    <Route path="/register" element={<Navigate to="/Merchant" replace/>}/>
+    <Route path="/register" element={<Navigate to="/app/merchants/login" replace/>}/>
     <Route path="/app/*" element={<Shell/>}/>
     <Route path="/admin/*" element={<Navigate to="/root/7563" replace/>}/>
   </Routes>;
