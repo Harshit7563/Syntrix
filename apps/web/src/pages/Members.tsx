@@ -28,6 +28,8 @@ export function MerchantDesk() {
                   <th className="px-5 py-3 font-semibold">Email</th>
                   <th className="px-5 py-3 font-semibold">Pay-in</th>
                   <th className="px-5 py-3 font-semibold">Payout</th>
+                  <th className="px-5 py-3 font-semibold">Wallet</th>
+                  <th className="px-5 py-3 font-semibold">Charge</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -38,6 +40,8 @@ export function MerchantDesk() {
                     <td className="px-5 py-3.5 text-slate-500">{m.loginEmail || m.email || '—'}</td>
                     <td className="px-5 py-3.5 tnum text-slate-700">{inr(m.payinPaise)}</td>
                     <td className="px-5 py-3.5 tnum text-slate-700">{inr(m.payoutPaise)}</td>
+                    <td className="px-5 py-3.5 tnum font-semibold text-slate-900">{inr(Number(m.payinPaise || 0) + Number(m.payoutPaise || 0))}</td>
+                    <td className="px-5 py-3.5 tnum text-slate-700">{m.payinChargePercent ?? 0}% / {m.payoutChargePercent ?? 0}%</td>
                     <td className="px-5 py-3.5"><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${m.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>{m.active ? 'Active' : 'Inactive'}</span></td>
                   </tr>
                 ))}
