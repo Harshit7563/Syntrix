@@ -31,6 +31,7 @@ async function retireDemoPassword(p:PrismaService, userId:string){ await p.user.
     let u:any=null;
     if(raw.includes('@')) u=await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}});
     else if(mobile.length===10) u=await this.p.user.findFirst({where:{phone:mobile}});
+    else { const code=raw.toUpperCase().replace(/\s/g,''); const merch=await this.p.merchantProfile.findFirst({where:{memberCode:code}}); if(merch){ const mem=await this.p.membership.findFirst({where:{orgId:merch.orgId,role:'MERCHANT_OWNER'},include:{user:true}}); u=mem?.user||null; } }
     if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ mark(); throw new UnauthorizedException('Invalid email or password'); }
     mark();
     await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}}); return this.issue(u,res,req);

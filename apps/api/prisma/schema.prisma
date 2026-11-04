@@ -145,6 +145,8 @@ model MerchantProfile {
   payoutChargeBps            Int?
   /// Encrypted copy of the merchant portal password so staff can show it.
   loginPasswordEnc           String?
+  /// Short id for merchant portal login, e.g. M482193.
+  memberCode                 String?             @unique
   directors                  Director[]
   owners                     BeneficialOwner[]
   bankAccounts               BankAccount[]

@@ -20,6 +20,17 @@ function chargeBps(v: unknown) {
   return Math.round(n * 100);
 }
 
+function makeMemberCode() {
+  return 'M' + String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function makePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
 function viewSlab(s: any) {
   return {
     id: s.id,
@@ -116,6 +127,7 @@ export class MerchantDeskController {
       loginPhone: login?.phone || '',
       loginActive: login ? !!login.isActive : false,
       loginPassword,
+      memberId: m.memberCode || '',
       ...(await this.chargePercents(m)),
       ...wallet,
     };
@@ -138,10 +150,19 @@ export class MerchantDeskController {
   @Perm('merchant:write')
   async create(@Body() b: any) {
     const name = String(b.businessName || '').trim();
-    const email = String(b.email || '').trim().toLowerCase();
+    let email = String(b.email || '').trim().toLowerCase();
     if (name.length < 2) throw new BadRequestException('Merchant name is required');
-    if (!email.includes('@')) throw new BadRequestException('Email is required for member login');
-    if (String(b.password || '').length < 8) throw new BadRequestException('Login password must be at least 8 characters');
+    let memberCode = String(b.memberId || b.memberCode || '').trim().toUpperCase();
+    if (!memberCode) {
+      for (let i = 0; i < 12; i++) {
+        const c = makeMemberCode();
+        if (!(await this.p.merchantProfile.findUnique({ where: { memberCode: c } }))) { memberCode = c; break; }
+      }
+    }
+    if (!memberCode) throw new BadRequestException('Could not allocate a member id');
+    if (await this.p.merchantProfile.findUnique({ where: { memberCode } })) throw new BadRequestException('This member id is already in use');
+    const password = String(b.password || '').length >= 8 ? String(b.password) : makePassword();
+    if (!email.includes('@')) email = memberCode.toLowerCase() + '@member.syntrixapi.in';
     if (await this.p.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } })) throw new BadRequestException('This email already has a login');
     const active = b.active !== false;
     const org = await this.p.organization.create({ data: { name, type: 'MERCHANT' } });
@@ -150,6 +171,7 @@ export class MerchantDeskController {
         orgId: org.id,
         businessName: name,
         email: email || null,
+        memberCode,
         payinChargeBps: chargeBps(b.payinChargePercent ?? 0),
         payoutChargeBps: chargeBps(b.payoutChargePercent ?? 0),
         walletHoldPaise: rupees(b.holdRupees ?? 0) ?? 0n,
@@ -174,7 +196,7 @@ export class MerchantDeskController {
     await this.p.portalMember.create({
       data: { merchantId: row.id, name, mobile, email: email || null, status: 'ACTIVE' },
     });
-    await this.ensureLogin(org.id, row.id, { ...b, email, mobile }, email);
+    await this.ensureLogin(org.id, row.id, { ...b, email, mobile, password }, email);
     const memberCount = 1;
     return await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
   }

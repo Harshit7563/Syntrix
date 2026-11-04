@@ -7,13 +7,13 @@ const msBtn="bg-[#0067c0] hover:bg-[#005da6] active:bg-[#005494] text-white text
 export function Login(){ return <MemberLogin/>; }
 
 export function MemberLogin(){ const nav=useNavigate(); const [f,setF]=useState({email:'',password:''}); const [err,setErr]=useState(''); const [busy,setBusy]=useState(false);
- const submit=async(e?:any)=>{ e?.preventDefault(); if(!f.email.trim()||!f.password) return setErr('Enter email or mobile, and password.'); setErr(''); setBusy(true); try{ await api('/auth/login',{method:'POST',body:f}); nav('/app'); }catch(ex:any){ setErr(ex.message||'Could not sign in'); setBusy(false); } };
+ const submit=async(e?:any)=>{ e?.preventDefault(); if(!f.email.trim()||!f.password) return setErr('Enter member ID and password.'); setErr(''); setBusy(true); try{ await api('/auth/login',{method:'POST',body:f}); nav('/app'); }catch(ex:any){ setErr(ex.message||'Could not sign in'); setBusy(false); } };
  return <AuthShell>
   <h1 className="font-display text-[28px] leading-tight font-extrabold tracking-tight text-[#1b1b1b]">Merchant sign in</h1>
-  <p className="text-sm text-[#605e5c] mt-1.5">Email ya mobile, aur password.</p>
+  <p className="text-sm text-[#605e5c] mt-1.5">Member ID aur password.</p>
   {err&&<Alert>{err}</Alert>}
   <form onSubmit={submit} className="mt-6 space-y-5">
-   <input className={msInput} autoFocus autoComplete="username" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Email or mobile"/>
+   <input className={msInput} autoFocus autoComplete="username" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="Member ID"/>
    <input className={msInput} type="password" autoComplete="current-password" value={f.password} onChange={e=>setF({...f,password:e.target.value})} placeholder="Password"/>
    <div className="flex justify-end pt-2"><button className={msBtn} disabled={busy}>{busy?'Signing in…':'Sign in'}</button></div>
   </form>
