@@ -6,7 +6,9 @@ export function MerchantDesk() {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['merchant-desk'], queryFn: () => api('/merchant-desk') });
   const [adding, setAdding] = useState(false);
+  const [manageId, setManageId] = useState<string | null>(null);
   const rows = Array.isArray(list.data) ? list.data : [];
+  const managing = rows.find((m: any) => m.id === manageId);
 
   return (
     <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col">
@@ -17,6 +19,7 @@ export function MerchantDesk() {
           <button type="button" onClick={() => setAdding(true)} className="ml-auto h-9 px-4 rounded-full bg-slate-900 text-white text-[13px] font-semibold">Add new merchant</button>
         </div>
         {adding && <AddMerchant onDone={() => { qc.invalidateQueries({ queryKey: ['merchant-desk'] }); setAdding(false); }} onCancel={() => setAdding(false)} />}
+        {managing && <ManageMerchant merchant={managing} onClose={() => setManageId(null)} onSaved={() => qc.invalidateQueries({ queryKey: ['merchant-desk'] })} />}
         <div className="flex-1 min-h-0 overflow-auto">
           {list.isLoading && <p className="px-5 py-8 text-[13px] text-slate-400">Loading…</p>}
           {!list.isLoading && !rows.length && !adding && <p className="px-5 py-16 text-center text-[13px] text-slate-400">No merchants yet.</p>}
@@ -31,6 +34,7 @@ export function MerchantDesk() {
                   <th className="px-5 py-3 font-semibold">Wallet</th>
                   <th className="px-5 py-3 font-semibold">Charge</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold"></th>
                 </tr>
               </thead>
               <tbody>
@@ -43,6 +47,9 @@ export function MerchantDesk() {
                     <td className="px-5 py-3.5 tnum font-semibold text-slate-900">{inr(Number(m.payinPaise || 0) + Number(m.payoutPaise || 0))}</td>
                     <td className="px-5 py-3.5 tnum text-slate-700">{m.payinChargePercent ?? 0}% / {m.payoutChargePercent ?? 0}%</td>
                     <td className="px-5 py-3.5"><StatusToggle merchant={m} /></td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button type="button" onClick={() => { setAdding(false); setManageId(m.id); }} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">Manage</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -77,6 +84,62 @@ function StatusToggle({ merchant }: { merchant: any }) {
         <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow ${merchant.active ? 'left-[18px]' : 'left-0.5'}`} />
       </span>
     </button>
+  );
+}
+
+function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    businessName: merchant.businessName || '',
+    email: merchant.loginEmail || merchant.email || '',
+    payinChargePercent: String(merchant.payinChargePercent ?? 0),
+    payoutChargePercent: String(merchant.payoutChargePercent ?? 0),
+    holdRupees: String((merchant.holdPaise || 0) / 100),
+    password: '',
+    mobile: merchant.loginPhone || '',
+  });
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const save = useMutation({
+    mutationFn: async () => {
+      await api('/merchant-desk/' + merchant.id + '/profile', {
+        method: 'POST',
+        body: {
+          businessName: form.businessName,
+          email: form.email,
+          payinChargePercent: form.payinChargePercent,
+          payoutChargePercent: form.payoutChargePercent,
+          holdRupees: form.holdRupees,
+          active: !!merchant.active,
+        },
+      });
+      if (form.password) {
+        await api('/merchant-desk/' + merchant.id + '/login', {
+          method: 'POST',
+          body: { email: form.email, mobile: form.mobile, password: form.password },
+        });
+      }
+    },
+    onSuccess: () => { setErr(''); setOk('Saved'); setForm({ ...form, password: '' }); onSaved(); setTimeout(() => setOk(''), 1600); },
+    onError: (e: any) => setErr(e.message || 'Could not save'),
+  });
+  return (
+    <form className="shrink-0 px-5 py-4 border-b border-slate-100 bg-[#fafbfd]" onSubmit={e => { e.preventDefault(); save.mutate(); }}>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[13.5px] font-bold text-slate-900">Manage · {merchant.businessName || 'Merchant'}</p>
+        <button type="button" onClick={onClose} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-600">Close</button>
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="block"><span className="label">Name</span><input className="input !w-44" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
+        <label className="block"><span className="label">Email</span><input className="input !w-52" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
+        <label className="block"><span className="label">Pay-in %</span><input className="input tnum !w-24" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
+        <label className="block"><span className="label">Payout %</span><input className="input tnum !w-24" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></label>
+        <label className="block"><span className="label">Hold ₹</span><input className="input tnum !w-28" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></label>
+        <label className="block"><span className="label">New password</span><input className="input !w-40" type="text" minLength={8} placeholder="Leave blank" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></label>
+        <button className="h-10 px-4 rounded-full bg-slate-900 text-white text-[13px] font-semibold disabled:opacity-60" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
+        {ok && <span className="text-[12px] font-semibold text-emerald-700 pb-2">{ok}</span>}
+      </div>
+      {err && <p className="text-[12.5px] text-rose-600 mt-2">{err}</p>}
+    </form>
   );
 }
 
