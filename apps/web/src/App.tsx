@@ -20,6 +20,12 @@ function Icon({d,active}:{d:string,active?:boolean}){
 
 /** OsTørk shell — collapsible dark sidebar + full-width canvas. */
 function Shell(){
+  const loc=useLocation();
+  if(loc.pathname.replace(/\/+$/,'')==='/app/merchants/login') return <MemberLogin/>;
+  return <AppShell/>;
+}
+
+function AppShell(){
   const [open,setOpen]=useState(()=>{ try{ return localStorage.getItem('sx_sidebar')!=='0'; }catch{ return true; } });
   const nav=useNavigate();
   const loc=useLocation();
