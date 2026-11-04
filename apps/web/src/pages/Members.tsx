@@ -34,7 +34,7 @@ export function MerchantDesk() {
                   <th className="px-5 py-3 font-semibold">Wallet</th>
                   <th className="px-5 py-3 font-semibold">Charge</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
-                  <th className="px-5 py-3 font-semibold"></th>
+                  <th className="px-5 py-3 font-semibold">Manage</th>
                 </tr>
               </thead>
               <tbody>
