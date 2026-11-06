@@ -65,11 +65,20 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Assess repo, document architecture, CI, merchant portal links | **in progress** |
-| 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | pending |
+| 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | **done** |
 | 3 | Settlement/recon product polish, beneficiary registry, maker-checker | pending |
 | 4 | Observability (metrics, structured log pipeline, backup job) | pending |
 | 5 | Frontend design-system pass (only if product asks) | pending |
 | 6 | Production-readiness review (no certification claims) | pending |
+
+## Phase 2 this increment
+
+- [x] `/root/7563` requires admin email + password (empty POST login removed)
+- [x] Staff logout returns to `/root/7563`
+- [x] Issue Member ID + password for old merchants (`POST /merchant-desk/:id/issue-login` and bulk `issue-missing-logins`)
+- [x] Merchant desk handoff: login URL, API base, IP allowlist, merchant webhook vs ORVIAN callback
+- [ ] MFA still not required on login (left skipped until asked)
+- [ ] Refresh-token WIP still uncommitted
 
 ## Phase 1 this increment
 
@@ -87,8 +96,8 @@ Run locally: `npm test` (API Jest). CI must not run `prisma db seed` on producti
 
 ## Known limitations
 
-- Admin URL `/root/7563` issues SUPER_ADMIN without password (temporary).
-- Old merchants created before Member ID may show `—` until re-added.
+- Admin URL `/root/7563` now requires email + password (2 attempts/min). MFA is still skipped.
+- Old merchants without Member ID: use **Issue IDs for old merchants** or Edit → Issue. New password cannot recover a lost bcrypt hash — it mints a new one.
 - Pay-in/payout API requires portal `memberId` (cuid), not Member ID `M######`.
 - ORVIAN webhook is platform-owned; merchant webhook URL is separate.
 - Uncommitted WIP in the working tree is not part of `main`.

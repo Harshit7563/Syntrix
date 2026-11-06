@@ -7,6 +7,7 @@ export function MerchantDesk() {
   const list = useQuery({ queryKey: ['merchant-desk'], queryFn: () => api('/merchant-desk') });
   const [adding, setAdding] = useState(false);
   const [manageId, setManageId] = useState<string | null>(null);
+  const [issued, setIssued] = useState<any>(null);
   const rows = Array.isArray(list.data) ? list.data : [];
   const managing = rows.find((m: any) => m.id === manageId);
 
@@ -16,9 +17,12 @@ export function MerchantDesk() {
         <div className="shrink-0 px-5 py-4 border-b border-slate-100 flex items-center gap-3">
           <p className="text-[16px] font-bold text-slate-900">Merchants</p>
           <span className="text-[12.5px] text-slate-400 tnum">{rows.length}</span>
+          {rows.some((m: any) => m.needsCredentials) && (
+            <button type="button" onClick={() => api('/merchant-desk/issue-missing-logins', { method: 'POST', body: {} }).then((r: any) => { qc.invalidateQueries({ queryKey: ['merchant-desk'] }); if (r.errors?.length) window.alert(r.errors.length + ' merchants could not be issued'); })} className="h-9 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-700 hover:bg-slate-50">Issue IDs for old merchants</button>
+          )}
           <button type="button" onClick={() => setAdding(true)} className="ml-auto h-9 px-4 rounded-full bg-slate-900 text-white text-[13px] font-semibold">Add new merchant</button>
         </div>
-        {adding && <AddMerchant onDone={() => { qc.invalidateQueries({ queryKey: ['merchant-desk'] }); setAdding(false); }} onCancel={() => setAdding(false)} />}
+        {adding && <AddMerchant onDone={(m) => { qc.invalidateQueries({ queryKey: ['merchant-desk'] }); setAdding(false); setIssued(m); }} onCancel={() => setAdding(false)} />}
         <div className="flex-1 min-h-0 overflow-auto">
           {list.isLoading && <p className="px-5 py-8 text-[13px] text-slate-400">Loading…</p>}
           {!list.isLoading && !rows.length && !adding && <p className="px-5 py-16 text-center text-[13px] text-slate-400">No merchants yet.</p>}
@@ -59,6 +63,7 @@ export function MerchantDesk() {
         </div>
       </div>
       {managing && <ManageMerchant merchant={managing} onClose={() => setManageId(null)} onSaved={() => qc.invalidateQueries({ queryKey: ['merchant-desk'] })} />}
+      {issued && <IssuedMerchant merchant={issued} onClose={() => setIssued(null)} />}
     </div>
   );
 }
@@ -125,12 +130,21 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block"><span className="label">Member ID</span><input className="input tnum" readOnly value={merchant.memberId || '—'} /></label>
           <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.loginPassword || '—'} /></label>
+          {merchant.needsCredentials && (
+            <button type="button" className="sm:col-span-2 h-10 rounded-full border border-slate-200 text-[13px] font-semibold text-slate-700" onClick={async () => {
+              try {
+                await api('/merchant-desk/' + merchant.id + '/issue-login', { method: 'POST', body: {} });
+                setErr(''); setOk('Member ID issued'); onSaved();
+              } catch (e: any) { setErr(e.message || 'Could not issue login'); }
+            }}>Issue Member ID + password</button>
+          )}
           <label className="block"><span className="label">Name</span><input className="input" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
           <label className="block"><span className="label">Email</span><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
           <label className="block"><span className="label">Pay-in %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
           <label className="block"><span className="label">Payout %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payoutChargePercent} onChange={e => setForm({ ...form, payoutChargePercent: e.target.value })} /></label>
           <label className="block"><span className="label">Hold ₹</span><input className="input tnum" type="number" min={0} step="0.01" value={form.holdRupees} onChange={e => setForm({ ...form, holdRupees: e.target.value })} /></label>
         </div>
+        <Handoff merchant={merchant} />
         {err && <p className="text-[12.5px] text-rose-600 mt-3">{err}</p>}
         {ok && <p className="text-[12.5px] text-emerald-700 mt-3">{ok}</p>}
         <div className="mt-5 flex justify-end gap-2">
@@ -142,12 +156,12 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
   );
 }
 
-function AddMerchant({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function AddMerchant({ onDone, onCancel }: { onDone: (m: any) => void; onCancel: () => void }) {
   const [form, setForm] = useState({ businessName: '', mobile: '', email: '', payinChargePercent: '2', payoutChargePercent: '2' });
   const [err, setErr] = useState('');
   const save = useMutation({
     mutationFn: () => api('/merchant-desk', { method: 'POST', body: { ...form, holdRupees: '0', active: true } }),
-    onSuccess: () => onDone(),
+    onSuccess: (m) => onDone(m),
     onError: (e: any) => setErr(e.message || 'Could not add merchant'),
   });
   return (
@@ -165,5 +179,37 @@ function AddMerchant({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
       </div>
       {err && <p className="text-[12.5px] text-rose-600 mt-2">{err}</p>}
     </form>
+  );
+}
+
+function IssuedMerchant({ merchant, onClose }: { merchant: any; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-slate-900/40" />
+      <div className="relative w-full max-w-lg bg-white rounded-[20px] shadow-[0_20px_50px_rgba(15,23,42,.25)] p-5 sm:p-6" onClick={e => e.stopPropagation()}>
+        <p className="text-[16px] font-bold text-slate-900">Merchant ready · {merchant.businessName}</p>
+        <p className="text-[12.5px] text-slate-500 mt-1">Yeh details member ko de do. Password Edit pe bhi dikhega.</p>
+        <div className="grid sm:grid-cols-2 gap-3 mt-4">
+          <label className="block"><span className="label">Member ID</span><input className="input tnum" readOnly value={merchant.memberId || ''} /></label>
+          <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.loginPassword || ''} /></label>
+        </div>
+        <Handoff merchant={merchant} />
+        <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="h-10 px-5 rounded-full bg-slate-900 text-white text-[13px] font-semibold">Done</button></div>
+      </div>
+    </div>
+  );
+}
+
+function Handoff({ merchant }: { merchant?: any }) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://syntrixapi.in';
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-100 bg-[#fafbfd] p-3 text-[12.5px] text-slate-600 space-y-1.5 leading-relaxed">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Give the merchant</p>
+      <p>Login: <span className="font-semibold text-slate-800">{origin}/app/merchants/login</span>{merchant?.memberId ? ` · Member ID ${merchant.memberId}` : ''}</p>
+      <p>API: <span className="font-semibold text-slate-800">{origin}/api/v1</span> with header <code className="text-[12px]">X-Api-Key</code>. Keys page pe sandbox/production key banao.</p>
+      <p>IP: production payout ke liye merchant ke <span className="font-semibold text-slate-800">server ka public IP</span> Keys → Shield pe allowlist. Ye ORVIAN/bank IP nahi hai.</p>
+      <p>Webhook: merchant ki apni HTTPS URL Webhooks page pe. Bank callback Syntrix pe aata hai — merchant ko <span className="font-semibold text-slate-800">{origin}/api/webhooks/provider/ORVIAN</span> mat do.</p>
+      <p>Pay-in body ka <code className="text-[12px]">memberId</code> portal member ka cuid hai, Member ID (M######) nahi.</p>
+    </div>
   );
 }

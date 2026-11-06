@@ -24,21 +24,16 @@ async function retireDemoPassword(p:PrismaService, userId:string){ await p.user.
   const password=String(b.password||'');
   const email=raw.toLowerCase();
   const mobile=raw.replace(/\D/g,'').slice(-10);
-  if(raw||password){
-    const ip=clientIp(req);
-    if(overLoginLimit('ip:'+ip)||(email&&overLoginLimit('email:'+email))) throw new HttpException('Too many login attempts. Only 2 attempts are allowed per minute.',429);
-    const mark=()=>{ recordLogin('ip:'+ip); if(email) recordLogin('email:'+email); };
-    let u:any=null;
-    if(raw.includes('@')) u=await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}});
-    else if(mobile.length===10) u=await this.p.user.findFirst({where:{phone:mobile}});
-    else { const code=raw.toUpperCase().replace(/\s/g,''); const merch=await this.p.merchantProfile.findFirst({where:{memberCode:code}}); if(merch){ const mem=await this.p.membership.findFirst({where:{orgId:merch.orgId,role:'MERCHANT_OWNER'},include:{user:true}}); u=mem?.user||null; } }
-    if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ mark(); throw new UnauthorizedException('Invalid email or password'); }
-    mark();
-    await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}}); return this.issue(u,res,req);
-  }
-  // TEMP: empty body still opens admin. Member login uses email/mobile + password above.
-  const u=await this.p.user.findFirst({where:{isActive:true,memberships:{some:{role:'SUPER_ADMIN'}}},orderBy:{createdAt:'asc'}});
-  if(!u) throw new UnauthorizedException('No admin account to open');
+  if(!raw||!password) throw new BadRequestException('Email or member ID and password are required');
+  const ip=clientIp(req);
+  if(overLoginLimit('ip:'+ip)||(email&&overLoginLimit('email:'+email))) throw new HttpException('Too many login attempts. Only 2 attempts are allowed per minute.',429);
+  const mark=()=>{ recordLogin('ip:'+ip); if(email) recordLogin('email:'+email); };
+  let u:any=null;
+  if(raw.includes('@')) u=await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}});
+  else if(mobile.length===10) u=await this.p.user.findFirst({where:{phone:mobile}});
+  else { const code=raw.toUpperCase().replace(/\s/g,''); const merch=await this.p.merchantProfile.findFirst({where:{memberCode:code}}); if(merch){ const mem=await this.p.membership.findFirst({where:{orgId:merch.orgId,role:'MERCHANT_OWNER'},include:{user:true}}); u=mem?.user||null; } }
+  if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ mark(); throw new UnauthorizedException('Invalid email or password'); }
+  mark();
   await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}}); return this.issue(u,res,req); }
  @Post('mfa/setup') @UseGuards(AuthGuard) async mfaSetup(@CurrentUser() u:any){ const secret=Buffer.from(crypto.randomBytes(20)).toString('base64').replace(/[^A-Z2-7]/gi,'').slice(0,16).toUpperCase(); await this.p.user.update({where:{id:u.id},data:{mfaSecret:secret}}); const label=encodeURIComponent(`SyntrixAPI:${u.email}`); const otpauth=`otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent('SyntrixAPI')}&algorithm=SHA1&digits=6&period=30`; return {secret, otpauth, note:'Scan the QR in Google Authenticator or Microsoft Authenticator, then verify.'}; }
  @Post('mfa/verify') @UseGuards(AuthGuard) async mfaVerify(@CurrentUser() u:any,@Body() b:any){ const user=await this.p.user.findUnique({where:{id:u.id}}); if(!user?.mfaSecret||!totpOk(user.mfaSecret,String(b.totp))) throw new BadRequestException('Invalid code — check your authenticator and retry'); await this.p.user.update({where:{id:u.id},data:{mfaEnabled:true}}); return {mfaEnabled:true}; }

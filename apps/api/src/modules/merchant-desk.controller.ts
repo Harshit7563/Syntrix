@@ -128,6 +128,7 @@ export class MerchantDeskController {
       loginActive: login ? !!login.isActive : false,
       loginPassword,
       memberId: m.memberCode || '',
+      needsCredentials: !m.memberCode || !loginPassword,
       ...(await this.chargePercents(m)),
       ...wallet,
     };
@@ -222,6 +223,55 @@ export class MerchantDeskController {
     });
     await this.p.organization.update({ where: { id: m.orgId }, data: { name } });
     return await this.viewMerchant(row, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+  }
+
+  @Post(':merchantId/issue-login')
+  @Perm('merchant:write')
+  async issueLogin(@Param('merchantId') merchantId: string) {
+    const m = await this.merchant(merchantId);
+    let memberCode = String(m.memberCode || '').trim();
+    if (!memberCode) {
+      for (let i = 0; i < 12; i++) {
+        const c = makeMemberCode();
+        if (!(await this.p.merchantProfile.findUnique({ where: { memberCode: c } }))) { memberCode = c; break; }
+      }
+      if (!memberCode) throw new BadRequestException('Could not allocate a member id');
+      await this.p.merchantProfile.update({ where: { id: m.id }, data: { memberCode } });
+    }
+    let password = '';
+    if (m.loginPasswordEnc) {
+      try { password = decryptSecret(m.loginPasswordEnc); } catch { password = ''; }
+    }
+    const membership = await this.p.membership.findFirst({ where: { orgId: m.orgId, role: 'MERCHANT_OWNER' }, include: { user: true } });
+    if (!membership || !password) {
+      password = password || makePassword();
+      const portal = await this.p.portalMember.findFirst({ where: { merchantId: m.id }, orderBy: { createdAt: 'asc' } });
+      const email = String(m.email || membership?.user?.email || '').trim().toLowerCase() || (memberCode.toLowerCase() + '@member.syntrixapi.in');
+      const mobile = String(membership?.user?.phone || portal?.mobile || '').replace(/\D/g, '').slice(-10);
+      await this.ensureLogin(m.orgId, m.id, { email, mobile, password }, email);
+      if (!m.email) await this.p.merchantProfile.update({ where: { id: m.id }, data: { email } });
+    }
+    const fresh = await this.p.merchantProfile.findUniqueOrThrow({ where: { id: m.id }, include: { _count: { select: { members: true } }, org: { include: this.orgLoginInclude() } } });
+    return this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
+  }
+
+  @Post('issue-missing-logins')
+  @Perm('merchant:write')
+  async issueMissing() {
+    const rows = await this.p.merchantProfile.findMany({ orderBy: { createdAt: 'asc' } });
+    const issued = [];
+    const errors: { id: string; message: string }[] = [];
+    for (const m of rows) {
+      let password = '';
+      if (m.loginPasswordEnc) { try { password = decryptSecret(m.loginPasswordEnc); } catch { password = ''; } }
+      if (m.memberCode && password) continue;
+      try {
+        issued.push(await this.issueLogin(m.id));
+      } catch (e: any) {
+        errors.push({ id: m.id, message: String(e?.message || 'Could not issue login') });
+      }
+    }
+    return { count: issued.length, merchants: issued, errors };
   }
 
   @Post(':merchantId/login')
