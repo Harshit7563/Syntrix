@@ -15,4 +15,6 @@
 - Postgres dumps: `backup` service in the main compose file (see `docs/BACKUP_RECOVERY.md`).
 
 ## Migrations / env
-See `.env.example`. Commands: `npm run db:generate|db:migrate|db:seed -w @syntrix/api` (prod: `db:deploy`).
+See `.env.example`. Commands: `npm run db:generate|db:migrate|db:seed -w @syntrix/api` (prod: `db:deploy`). Never seed production.
+
+Readiness: `docs/PRODUCTION_READINESS.md` (current verdict: **not production-ready**). Security: `docs/SECURITY_CHECKLIST.md`.

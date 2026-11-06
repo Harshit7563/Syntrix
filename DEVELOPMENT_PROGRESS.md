@@ -39,7 +39,7 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 ## What already works
 
 - Docker Compose, health `/health` + `/health/ready`, nginx, Prisma migrations
-- Auth cookies (`sx_access` / `sx_refresh`), MFA code paths (currently skipped on admin open URL)
+- Auth cookies (`sx_access` / `sx_refresh`); MFA setup exists, login does not require TOTP
 - Merchant desk: add merchant, auto Member ID + password, status toggle, edit popup
 - Merchant login, API keys, IP allowlist, payout shield, signing secrets
 - Pay-in / payout / refund v1, idempotency, UNKNOWN-safe payouts, circuit breaker
@@ -51,14 +51,12 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 
 ## Gaps vs enterprise spec (ordered)
 
-1. GitHub Actions CI, Prometheus/Grafana, automated DB backups in-compose (backup docs exist)
-2. Merchant nav missing Webhooks + Docs (pages exist)
-3. Support role, Grafana, extra design-system pass
-4. Refresh-token rotation (WIP in working tree — do not ship the large auth rewrite as-is)
-5. shadcn/Zustand/RHF/Zod/Recharts/Lucide stack swap — **not Phase 1**; keep current UI
-6. Public `/api/v1/payin/orders` aliases — live contract is `/api/v1/payins` (keep; add aliases later if needed)
-7. Temporary open admin at `/root/7563` — lock before calling the site “production-ready”
-8. Dirty local WIP (seed, guards, payments, mobile) must not be committed wholesale
+1. MFA not required at staff login; `/root/7563` is not IP-restricted
+2. GitHub Actions not installed (`docs/github-ci.yml` only)
+3. Support role, shadcn/Zustand rewrite — not started
+4. Refresh-token WIP in the working tree — do not ship wholesale
+5. Single VPS; dump backups untested; no pentest
+6. Dirty local WIP (seed, guards, payments, mobile) must not be committed wholesale
 
 ## Phases
 
@@ -68,8 +66,16 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 | 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | **done** |
 | 3 | Settlement/recon product polish, beneficiary registry, maker-checker | **done** |
 | 4 | Observability (metrics, structured log pipeline, backup job) | **done** |
-| 5 | Frontend design-system pass (only if product asks) | pending |
-| 6 | Production-readiness review (no certification claims) | pending |
+| 5 | Frontend design-system pass (only if product asks) | **skipped** |
+| 6 | Production-readiness review (no certification claims) | **done — not production-ready** |
+
+## Phase 6 this increment
+
+- [x] `docs/PRODUCTION_READINESS.md` — verdict **not production-ready**
+- [x] `docs/SECURITY_CHECKLIST.md` — controls vs gaps, no certification claims
+- [x] nginx: public `/metrics` and `/api/metrics` return 404
+- [x] Phase 5 shadcn pass skipped (not requested)
+- [ ] MFA-at-login, managed Postgres PITR, GitHub Actions, pentest — still open
 
 ## Phase 4 this increment
 
