@@ -50,6 +50,8 @@ function AppShell(){
     ['/app/payouts','Payouts',I.card],
     ['/app/transactions','Transactions',I.txn],
     ['/app/credentials','Keys',I.key],
+    ['/app/webhooks','Webhooks',I.hook],
+    ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
   ];
 
@@ -70,6 +72,8 @@ function AppShell(){
     ['/app/payouts','Payouts'],
     ['/app/transactions','Transactions'],
     ['/app/credentials','Keys'],
+    ['/app/webhooks','Webhooks'],
+    ['/app/playground','Docs'],
     ['/app/settings','Settings'],
   ];
 

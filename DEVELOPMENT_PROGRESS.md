@@ -1,0 +1,94 @@
+# SYNTRIXAPI — development progress
+
+Live site: https://syntrixapi.in  
+Repo is an existing **modular monolith**, not a greenfield demo. This file tracks the enterprise spec against what already runs. Money movement is only through configured providers (currently **ORVIAN**). Ledger balances are internal books, not bank proof.
+
+## Architecture (current)
+
+```
+apps/web     React + Vite + Tailwind + TanStack Query (admin + merchant SPA)
+apps/api     NestJS + Prisma + PostgreSQL 16 + Redis 7
+apps/mobile  optional (uncommitted / incomplete)
+packages/shared  roles, permissions, canonical types (paise)
+workers/python   recon helper
+nginx        TLS reverse proxy, SPA try_files, /api → Nest
+docker compose   postgres, redis, api, worker, web
+```
+
+**Money path:** merchant `X-Api-Key` → `/api/v1/payins|payouts|refunds` → routing rules → `ProviderAdapter` (ORVIAN / mock / generic HTTP) → integer-paise double-entry ledger → outbox → merchant webhooks (HMAC).  
+**Admin path:** `/root/7563` (temporary open admin).  
+**Merchant path:** `/app/merchants/login` (Member ID + password).
+
+Do not rewrite this into microservices, shadcn, or Zustand in one pass. Preserve live ORVIAN, cookies, and merchant-desk.
+
+## Role map (do not rename live enums yet)
+
+| Spec name | Live `Role` |
+|---|---|
+| Super Admin | `SUPER_ADMIN` |
+| Operations Admin | `OPERATIONS` |
+| Finance Admin | `ACCOUNTS` |
+| Compliance Officer | `COMPLIANCE` |
+| Support Executive | *missing* — do not invent until a Support module exists |
+| Merchant Admin | `MERCHANT_OWNER` |
+| Merchant Developer | `MERCHANT_DEVELOPER` |
+| Merchant Viewer | `MERCHANT_VIEWER` |
+
+Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard` + `@Perm`. Merchant APIs are tenant-scoped with `assertTenant`.
+
+## What already works
+
+- Docker Compose, health `/health` + `/health/ready`, nginx, Prisma migrations
+- Auth cookies (`sx_access` / `sx_refresh`), MFA code paths (currently skipped on admin open URL)
+- Merchant desk: add merchant, auto Member ID + password, status toggle, edit popup
+- Merchant login, API keys, IP allowlist, payout shield, signing secrets
+- Pay-in / payout / refund v1, idempotency, UNKNOWN-safe payouts, circuit breaker
+- ORVIAN adapter + inbound `POST /api/webhooks/provider/ORVIAN`
+- Merchant outbound webhooks (HMAC, backoff, DLQ, replay)
+- Ledger (immutable postings, paise BigInt)
+- Admin dashboard, transactions, APIs page, recon, audit, reports
+- Jest specs under `apps/api` (`payments.logic`, providers, orvian, bawji)
+
+## Gaps vs enterprise spec (ordered)
+
+1. GitHub Actions CI, Prometheus/Grafana, automated DB backups in-compose (backup docs exist)
+2. Merchant nav missing Webhooks + Docs (pages exist)
+3. Support role, dedicated beneficiaries API, maker-checker UI, T+N settlement productisation
+4. Refresh-token rotation (WIP in working tree — do not ship the large auth rewrite as-is)
+5. shadcn/Zustand/RHF/Zod/Recharts/Lucide stack swap — **not Phase 1**; keep current UI
+6. Public `/api/v1/payin/orders` aliases — live contract is `/api/v1/payins` (keep; add aliases later if needed)
+7. Temporary open admin at `/root/7563` — lock before calling the site “production-ready”
+8. Dirty local WIP (seed, guards, payments, mobile) must not be committed wholesale
+
+## Phases
+
+| Phase | Goal | Status |
+|---|---|---|
+| 1 | Assess repo, document architecture, CI, merchant portal links | **in progress** |
+| 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | pending |
+| 3 | Settlement/recon product polish, beneficiary registry, maker-checker | pending |
+| 4 | Observability (metrics, structured log pipeline, backup job) | pending |
+| 5 | Frontend design-system pass (only if product asks) | pending |
+| 6 | Production-readiness review (no certification claims) | pending |
+
+## Phase 1 this increment
+
+- [x] Repository assessment (this file)
+- [x] Map spec to live modules (see `docs/ARCHITECTURE.md`)
+- [x] CI recipe: `docs/github-ci.yml` (copy to `.github/workflows/ci.yml` when the GitHub token has `workflow` scope)
+- [x] Merchant sidebar: Keys, Webhooks, Docs
+- [ ] Full shadcn rebuild — **out of scope**
+- [ ] Prometheus/Grafana — Phase 4
+- [ ] New Support role — later
+
+## Tests
+
+Run locally: `npm test` (API Jest). CI must not run `prisma db seed` on production.
+
+## Known limitations
+
+- Admin URL `/root/7563` issues SUPER_ADMIN without password (temporary).
+- Old merchants created before Member ID may show `—` until re-added.
+- Pay-in/payout API requires portal `memberId` (cuid), not Member ID `M######`.
+- ORVIAN webhook is platform-owned; merchant webhook URL is separate.
+- Uncommitted WIP in the working tree is not part of `main`.
