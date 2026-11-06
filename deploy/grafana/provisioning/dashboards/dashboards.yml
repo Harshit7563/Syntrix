@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: syntrix
+    orgId: 1
+    folder: Syntrix
+    type: file
+    disableDeletion: true
+    options:
+      path: /var/lib/grafana/dashboards

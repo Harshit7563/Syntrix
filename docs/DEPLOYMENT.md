@@ -9,6 +9,10 @@
 - Private S3 bucket with versioning + SSE, presigned 5-minute downloads; malware scanning (ClamAV or provider) wired via `MALWARE_SCANNER`.
 - Secrets in a KMS/secrets manager; separate sandbox and production databases, keys, and provider credentials. Restrict `/docs` and admin routes by SSO/IP at the LB. TLS everywhere, WAF + rate limits.
 - Graceful shutdown: API/worker handle SIGTERM; drain LB before deploy.
+- Logs: API writes one JSON line per request (`ts`, `level`, `method`, `route`, `status`, `ms`, `requestId`). Secrets are redacted. Do not ship request bodies.
+- Metrics: scrape `http://api:3001/metrics` on the Docker network. Nginx does not publish `/metrics` on the public site. Optional token: `METRICS_TOKEN` + header `x-metrics-token`.
+- Prometheus/Grafana (loopback only): `docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d prometheus grafana`
+- Postgres dumps: `backup` service in the main compose file (see `docs/BACKUP_RECOVERY.md`).
 
 ## Migrations / env
 See `.env.example`. Commands: `npm run db:generate|db:migrate|db:seed -w @syntrix/api` (prod: `db:deploy`).

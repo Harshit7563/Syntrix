@@ -1,0 +1,26 @@
+{
+  "title": "Syntrix API",
+  "uid": "syntrix-api",
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "API up",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "syntrix_up", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Uptime seconds",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "syntrix_process_uptime_seconds", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP requests",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "targets": [{ "expr": "sum by (route,status) (rate(syntrix_http_requests_total[5m]))", "refId": "A" }]
+    }
+  ]
+}

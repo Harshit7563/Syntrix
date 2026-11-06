@@ -67,9 +67,18 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 | 1 | Assess repo, document architecture, CI, merchant portal links | **done** |
 | 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | **done** |
 | 3 | Settlement/recon product polish, beneficiary registry, maker-checker | **done** |
-| 4 | Observability (metrics, structured log pipeline, backup job) | pending |
+| 4 | Observability (metrics, structured log pipeline, backup job) | **done** |
 | 5 | Frontend design-system pass (only if product asks) | pending |
 | 6 | Production-readiness review (no certification claims) | pending |
+
+## Phase 4 this increment
+
+- [x] JSON request logs (`HttpLogInterceptor`) with redaction and `x-request-id`
+- [x] Prometheus text at `GET /metrics` (not on the public nginx vhost)
+- [x] Nightly `pg_dump` job (`backup` service + `scripts/pg-backup.sh`)
+- [x] Optional Grafana/Prometheus overlay `docker-compose.observability.yml` (127.0.0.1 only)
+- [ ] Central log shipper (Loki/ELK) — not in this phase
+- [ ] PITR / tested restore drill — still a runbook, not evidence
 
 ## Phase 3 this increment
 
@@ -98,7 +107,7 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 - [x] CI recipe: `docs/github-ci.yml` (copy to `.github/workflows/ci.yml` when the GitHub token has `workflow` scope)
 - [x] Merchant sidebar: Keys, Webhooks, Docs
 - [ ] Full shadcn rebuild — **out of scope**
-- [ ] Prometheus/Grafana — Phase 4
+- [x] Prometheus/Grafana overlay — Phase 4 (optional compose file)
 - [ ] New Support role — later
 
 ## Tests

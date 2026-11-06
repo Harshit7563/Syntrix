@@ -1,0 +1,40 @@
+# Optional. Not started by `docker compose up`.
+# docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d prometheus grafana
+#
+# Prometheus and Grafana bind to loopback only. Do not publish 9090/3000 on the public NIC.
+# If METRICS_TOKEN is set on the API, put the same value in deploy/metrics_token (gitignored).
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://127.0.0.1:3000
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheusdata: {}
+  grafanadata: {}
