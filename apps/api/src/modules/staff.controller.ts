@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
@@ -11,6 +11,18 @@ const ASSIGNABLE = ['SUPPORT', 'COMPLIANCE', 'OPERATIONS', 'ACCOUNTS'] as const;
 @UseGuards(AuthGuard, StaffGuard)
 export class StaffAdminController {
   constructor(private p: PrismaService) {}
+
+  @Get('staff')
+  async list(@CurrentUser() u: any) {
+    if (u.role !== 'SUPER_ADMIN') throw new ForbiddenException('Only Super Admin can list staff');
+    const mine = await this.p.membership.findFirst({ where: { userId: u.id, role: 'SUPER_ADMIN' } });
+    if (!mine) throw new ForbiddenException('No platform org');
+    const rows = await this.p.membership.findMany({
+      where: { orgId: mine.orgId, role: { in: ['SUPPORT', 'COMPLIANCE', 'OPERATIONS', 'ACCOUNTS', 'SUPER_ADMIN'] } },
+      include: { user: { select: { id: true, email: true, isActive: true, mfaEnabled: true } } },
+    });
+    return rows.map((r) => ({ id: r.user.id, email: r.user.email, role: r.role, isActive: r.user.isActive, mfaEnabled: r.user.mfaEnabled }));
+  }
 
   @Post('staff')
   async create(@CurrentUser() u: any, @Body() b: any) {

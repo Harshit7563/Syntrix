@@ -51,11 +51,11 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 
 ## Gaps vs enterprise spec (ordered)
 
-1. `/root/7563` is not IP-restricted
-2. GitHub Actions file is in `.github/workflows/ci.yml` — remote may still reject without `workflow` scope
-3. shadcn primitives only (Button/Input/Card) — not a full SPA rewrite
+1. `/root/7563` nginx include + `ADMIN_IP_ALLOWLIST` — set your laptop IP on VPS or it stays open
+2. GitHub Actions still needs `workflow` scope (`docs/github-ci.yml`)
+3. shadcn primitives only — not a full SPA rewrite
 4. Refresh-token WIP in the working tree — do not ship wholesale
-5. Single VPS; WAL archive configured, restore drill not done; no pentest executed
+5. Single VPS; WAL + dump; restore drill **not** executed; pentest **not** executed
 6. Dirty local WIP (seed, payments, mobile) must not be committed wholesale
 
 ## Phases

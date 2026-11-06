@@ -9,9 +9,9 @@ Date: 2026-11-06. Scope: `main` source review + `npm audit` where run.
 | ID | Severity | Finding | Status |
 |---|---|---|---|
 | S1 | High | Staff login did not require TOTP even when `mfaEnabled` | Fixed on this branch: TOTP required when MFA is on; staff without MFA must enroll before other admin APIs |
-| S2 | High | Merchant portal passwords stored reversible for the desk | Open — product choice |
-| S3 | Medium | `/root/7563` secrecy is not access control | Open — add IP allow/SSO |
-| S4 | Medium | Login rate limit is in-process (per instance) | Open |
+| S2 | High | Merchant portal passwords stored reversible for the desk | Mitigated: list no longer decrypts; create/reset shows once |
+| S3 | Medium | `/root/7563` secrecy is not access control | Mitigated if `ADMIN_IP_ALLOWLIST` / nginx allow is set |
+| S4 | Medium | Login rate limit is in-process (per instance) | Mitigated: Redis when `REDIS_URL` is up |
 | S5 | Low | GitHub Actions workflow committed; remote may still reject without `workflow` scope | `.github/workflows/ci.yml` |
 | S6 | Info | Public `/metrics` blocked at nginx | Already 404 |
 

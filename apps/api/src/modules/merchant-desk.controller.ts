@@ -3,7 +3,6 @@ import { ApiTags } from '@nestjs/swagger';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
 import { AuthGuard, Perm, StaffGuard } from '../common/guards';
-import { encryptSecret, decryptSecret } from '../common/core';
 import { LedgerService, acct } from './ledger.service';
 
 function rupees(v: unknown) {
@@ -101,15 +100,13 @@ export class MerchantDeskController {
       const u = await this.p.user.create({ data: { email, phone: mobile.length === 10 ? mobile : null, passwordHash: await bcrypt.hash(password, 12), isActive: true } });
       await this.p.membership.create({ data: { userId: u.id, orgId, role: 'MERCHANT_OWNER' } });
     }
-    await this.p.merchantProfile.update({ where: { id: merchantId }, data: { loginPasswordEnc: encryptSecret(password) } });
+    await this.p.merchantProfile.update({ where: { id: merchantId }, data: { loginPasswordEnc: null } });
   }
 
   private async viewMerchant(m: any, wallet: { payinPaise: number; payoutPaise: number; holdPaise: number; freePayinPaise: number }) {
     m = await this.withOrg(m);
     const owner = (m.org?.memberships || []).find((x: any) => x.role === 'MERCHANT_OWNER') || (m.org?.memberships || [])[0];
     const login = owner?.user;
-    let loginPassword = '';
-    if (m.loginPasswordEnc) { try { loginPassword = decryptSecret(m.loginPasswordEnc); } catch { loginPassword = ''; } }
     return {
       id: m.id,
       businessName: m.businessName || '',
@@ -126,9 +123,9 @@ export class MerchantDeskController {
       loginEmail: login?.email || '',
       loginPhone: login?.phone || '',
       loginActive: login ? !!login.isActive : false,
-      loginPassword,
+      loginPassword: '',
       memberId: m.memberCode || '',
-      needsCredentials: !m.memberCode || !loginPassword,
+      needsCredentials: !m.memberCode || !login,
       ...(await this.chargePercents(m)),
       ...wallet,
     };
@@ -199,7 +196,8 @@ export class MerchantDeskController {
     });
     await this.ensureLogin(org.id, row.id, { ...b, email, mobile, password }, email);
     const memberCount = 1;
-    return await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+    const view = await this.viewMerchant({ ...row, _count: { members: memberCount } }, await this.walletOf(row.id, Number(row.walletHoldPaise || 0)));
+    return { ...view, issuedPassword: password, loginPassword: password };
   }
 
   @Post(':merchantId/profile')
@@ -227,7 +225,7 @@ export class MerchantDeskController {
 
   @Post(':merchantId/issue-login')
   @Perm('merchant:write')
-  async issueLogin(@Param('merchantId') merchantId: string) {
+  async issueLogin(@Param('merchantId') merchantId: string, @Body() b: any) {
     const m = await this.merchant(merchantId);
     let memberCode = String(m.memberCode || '').trim();
     if (!memberCode) {
@@ -238,13 +236,11 @@ export class MerchantDeskController {
       if (!memberCode) throw new BadRequestException('Could not allocate a member id');
       await this.p.merchantProfile.update({ where: { id: m.id }, data: { memberCode } });
     }
-    let password = '';
-    if (m.loginPasswordEnc) {
-      try { password = decryptSecret(m.loginPasswordEnc); } catch { password = ''; }
-    }
     const membership = await this.p.membership.findFirst({ where: { orgId: m.orgId, role: 'MERCHANT_OWNER' }, include: { user: true } });
-    if (!membership || !password) {
-      password = password || makePassword();
+    const rotate = b?.rotate === true || !membership;
+    let password = '';
+    if (rotate) {
+      password = makePassword();
       const portal = await this.p.portalMember.findFirst({ where: { merchantId: m.id }, orderBy: { createdAt: 'asc' } });
       const email = String(m.email || membership?.user?.email || '').trim().toLowerCase() || (memberCode.toLowerCase() + '@member.syntrixapi.in');
       const mobile = String(membership?.user?.phone || portal?.mobile || '').replace(/\D/g, '').slice(-10);
@@ -252,7 +248,8 @@ export class MerchantDeskController {
       if (!m.email) await this.p.merchantProfile.update({ where: { id: m.id }, data: { email } });
     }
     const fresh = await this.p.merchantProfile.findUniqueOrThrow({ where: { id: m.id }, include: { _count: { select: { members: true } }, org: { include: this.orgLoginInclude() } } });
-    return this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
+    const view = await this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
+    return password ? { ...view, issuedPassword: password, loginPassword: password } : view;
   }
 
   @Post('issue-missing-logins')
@@ -262,11 +259,10 @@ export class MerchantDeskController {
     const issued = [];
     const errors: { id: string; message: string }[] = [];
     for (const m of rows) {
-      let password = '';
-      if (m.loginPasswordEnc) { try { password = decryptSecret(m.loginPasswordEnc); } catch { password = ''; } }
-      if (m.memberCode && password) continue;
+      const membership = await this.p.membership.findFirst({ where: { orgId: m.orgId, role: 'MERCHANT_OWNER' } });
+      if (m.memberCode && membership) continue;
       try {
-        issued.push(await this.issueLogin(m.id));
+        issued.push(await this.issueLogin(m.id, {}));
       } catch (e: any) {
         errors.push({ id: m.id, message: String(e?.message || 'Could not issue login') });
       }
@@ -283,7 +279,9 @@ export class MerchantDeskController {
       await this.p.merchantProfile.update({ where: { id: m.id }, data: { email: String(b.email).trim().toLowerCase() } });
     }
     const fresh = await this.p.merchantProfile.findUniqueOrThrow({ where: { id: m.id }, include: { _count: { select: { members: true } }, org: { include: this.orgLoginInclude() } } });
-    return this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
+    const view = await this.viewMerchant(fresh, await this.walletOf(fresh.id, Number(fresh.walletHoldPaise || 0)));
+    const issued = String(b.password || '');
+    return issued.length >= 8 ? { ...view, issuedPassword: issued, loginPassword: issued } : view;
   }
 
   @Get(':merchantId/wallet')

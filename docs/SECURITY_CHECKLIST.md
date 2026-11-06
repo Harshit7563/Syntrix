@@ -8,9 +8,9 @@ Honest mapping of controls in this repo. **Not** an OWASP/PCI/RBI audit report.
 - [x] Login 2/min per IP
 - [x] Public signup closed unless `ALLOW_PUBLIC_REGISTER=true`
 - [x] Standalone OTP disabled in production unless `ALLOW_STANDALONE_OTP=true`
-- [ ] MFA required at login for staff (setup/verify exist; login path skips TOTP)
+- [x] MFA required at login for staff when `mfaEnabled`; staff without MFA must enroll before other admin APIs
 - [ ] Admin URL `/root/7563` is not an access control; add IP allow or SSO
-- [x] Roles: `SUPER_ADMIN`, `OPERATIONS`, `ACCOUNTS`, `COMPLIANCE`, `MERCHANT_*`
+- [x] Roles: `SUPER_ADMIN`, `OPERATIONS`, `ACCOUNTS`, `COMPLIANCE`, `SUPPORT`, `MERCHANT_*`
 - [x] `@Perm` + `StaffGuard` on staff routes; merchant routes scoped by `merchantId`
 
 ## Money movement
@@ -34,7 +34,7 @@ Honest mapping of controls in this repo. **Not** an OWASP/PCI/RBI audit report.
 - [x] KYC files type/size limited; downloads via short-lived URL
 - [x] Logs redact keys matching secret/password/apiKey/pan/accountNo
 - [x] Request logs do not include bodies
-- [ ] Reversible merchant login passwords for the desk — product choice, high risk if staff accounts leak
+- [x] Merchant desk no longer decrypts stored portal passwords; password shown once on create/reset
 - [ ] No malware scanner wired (`MALWARE_SCANNER`)
 
 ## Transport / edge
@@ -47,7 +47,8 @@ Honest mapping of controls in this repo. **Not** an OWASP/PCI/RBI audit report.
 - [x] Webhook URLs must be HTTPS in production; SSRF host block
 - [x] Provider HTTP: allowlisted hosts, no redirects, timeout
 - [ ] WAF
-- [ ] Redis-backed rate limits for all routes (login + payout velocity are in-process)
+- [x] Login rate limit uses Redis when `REDIS_URL` is up (in-memory fallback)
+- [ ] Redis-backed rate limits for every route (payout velocity still in-process)
 
 ## Webhooks
 
@@ -61,9 +62,9 @@ Honest mapping of controls in this repo. **Not** an OWASP/PCI/RBI audit report.
 - [x] Do not commit `.env`
 - [x] Do not run `prisma db seed` on production
 - [x] Nightly `pg_dump` gzip (not PITR)
-- [ ] Restore drill recorded
-- [ ] GitHub Actions running on `main`
-- [ ] Pager for dead-letter webhooks / UNKNOWN payouts
+- [ ] Restore drill recorded (`scripts/restore-drill.sh` — not executed on live)
+- [ ] GitHub Actions running on `main` (needs `workflow` scope)
+- [x] Optional `ALERT_WEBHOOK_URL` for dead-letter webhooks / UNKNOWN txns
 
 ## Compliance language (required)
 

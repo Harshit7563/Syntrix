@@ -7,6 +7,7 @@ RUN npm install --workspace=@syntrix/web --include-workspace-root=false || npm i
 RUN npm run build -w @syntrix/web
 FROM nginx:alpine
 COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx/admin-allow.inc /etc/nginx/admin-allow.inc
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 # In compose, api service name must be reachable; for standalone web image nginx proxies /api/ to api:3001 — override conf as needed.
 EXPOSE 80

@@ -104,6 +104,7 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
   });
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
+  const [issuedPw, setIssuedPw] = useState(merchant.issuedPassword || merchant.loginPassword || '');
   const save = useMutation({
     mutationFn: () => api('/merchant-desk/' + merchant.id + '/profile', {
       method: 'POST',
@@ -129,15 +130,15 @@ function ManageMerchant({ merchant, onClose, onSaved }: { merchant: any; onClose
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           <label className="block"><span className="label">Member ID</span><input className="input tnum" readOnly value={merchant.memberId || '—'} /></label>
-          <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.loginPassword || '—'} /></label>
-          {merchant.needsCredentials && (
-            <button type="button" className="sm:col-span-2 h-10 rounded-full border border-slate-200 text-[13px] font-semibold text-slate-700" onClick={async () => {
-              try {
-                await api('/merchant-desk/' + merchant.id + '/issue-login', { method: 'POST', body: {} });
-                setErr(''); setOk('Member ID issued'); onSaved();
-              } catch (e: any) { setErr(e.message || 'Could not issue login'); }
-            }}>Issue Member ID + password</button>
-          )}
+          <label className="block sm:col-span-2"><span className="label">Password</span><input className="input" readOnly value={issuedPw || 'Stored as hash — reset to show once'} /></label>
+          <button type="button" className="sm:col-span-2 h-10 rounded-full border border-slate-200 text-[13px] font-semibold text-slate-700" onClick={async () => {
+            try {
+              const r:any=await api('/merchant-desk/' + merchant.id + '/issue-login', { method: 'POST', body: { rotate: true } });
+              setErr(''); setOk(r.issuedPassword ? 'New password issued once — copy it now' : 'Member ID issued');
+              if(r.issuedPassword) setIssuedPw(r.issuedPassword);
+              onSaved();
+            } catch (e: any) { setErr(e.message || 'Could not issue login'); }
+          }}>Reset Member ID password (shown once)</button>
           <label className="block"><span className="label">Name</span><input className="input" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
           <label className="block"><span className="label">Email</span><input className="input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></label>
           <label className="block"><span className="label">Pay-in %</span><input className="input tnum" type="number" min={0} max={100} step="0.01" value={form.payinChargePercent} onChange={e => setForm({ ...form, payinChargePercent: e.target.value })} /></label>
@@ -170,7 +171,7 @@ function AddMerchant({ onDone, onCancel }: { onDone: (m: any) => void; onCancel:
         <p className="text-[13.5px] font-bold text-slate-900">New merchant</p>
         <button type="button" onClick={onCancel} className="h-8 px-3 rounded-full border border-slate-200 text-[12.5px] font-semibold text-slate-600">Cancel</button>
       </div>
-      <p className="text-[12.5px] text-slate-400 mb-3">Member ID aur password apne aap banenge. Edit pe dikhenge.</p>
+      <p className="text-[12.5px] text-slate-400 mb-3">Member ID aur password apne aap banenge. Password sirf create/reset pe ek baar dikhega.</p>
       <div className="flex flex-wrap items-end gap-2">
         <label className="block"><span className="label">Name</span><input className="input !w-44" value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} required /></label>
         <label className="block"><span className="label">Mobile</span><input className="input tnum !w-36" inputMode="numeric" maxLength={10} value={form.mobile} onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) })} required /></label>
@@ -188,10 +189,10 @@ function IssuedMerchant({ merchant, onClose }: { merchant: any; onClose: () => v
       <div className="absolute inset-0 bg-slate-900/40" />
       <div className="relative w-full max-w-lg bg-white rounded-[20px] shadow-[0_20px_50px_rgba(15,23,42,.25)] p-5 sm:p-6" onClick={e => e.stopPropagation()}>
         <p className="text-[16px] font-bold text-slate-900">Merchant ready · {merchant.businessName}</p>
-        <p className="text-[12.5px] text-slate-500 mt-1">Yeh details member ko de do. Password Edit pe bhi dikhega.</p>
+        <p className="text-[12.5px] text-slate-500 mt-1">Yeh password ab dobara nahi dikhega. Copy karke merchant ko de do.</p>
         <div className="grid sm:grid-cols-2 gap-3 mt-4">
           <label className="block"><span className="label">Member ID</span><input className="input tnum" readOnly value={merchant.memberId || ''} /></label>
-          <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.loginPassword || ''} /></label>
+          <label className="block"><span className="label">Password</span><input className="input" readOnly value={merchant.issuedPassword || merchant.loginPassword || ''} /></label>
         </div>
         <Handoff merchant={merchant} />
         <div className="mt-5 flex justify-end"><button type="button" onClick={onClose} className="h-10 px-5 rounded-full bg-slate-900 text-white text-[13px] font-semibold">Done</button></div>

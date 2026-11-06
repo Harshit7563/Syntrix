@@ -7,7 +7,7 @@
 - `pg_dump | gzip` into volume `pgbackups` as `syntrix-YYYYMMDDTHHMMSSZ.sql.gz`
 - deletes dumps older than `BACKUP_KEEP_DAYS` (default 14)
 
-This is a **logical dump on one VPS**, not WAL/PITR and not a tested restore. Treat it as last-resort, not proof of recoverability.
+This is a **logical dump on one VPS**. WAL archiving is on (`pgwal` volume) but a restore drill is **not** proven until you run `scripts/restore-drill.sh` against a copy. Treat dumps as last-resort, not proof of recoverability. Set `BASEBACKUP=1` on the backup service to also take `pg_basebackup`.
 
 List dumps:
 

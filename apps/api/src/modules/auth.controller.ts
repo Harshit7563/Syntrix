@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Param, Req, Res, UseGuards, BadRequestException, ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common'; import { ApiTags } from '@nestjs/swagger'; import { PrismaService } from '../prisma.service'; import * as bcrypt from 'bcryptjs'; import * as jwt from 'jsonwebtoken'; import * as crypto from 'crypto'; import { sha256, totp } from '../common/core'; import { AuthGuard, CurrentUser } from '../common/guards';
+import { Body, Controller, Get, Post, Param, Req, Res, UseGuards, BadRequestException, ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common'; import { ApiTags } from '@nestjs/swagger'; import { PrismaService } from '../prisma.service'; import * as bcrypt from 'bcryptjs'; import * as jwt from 'jsonwebtoken'; import * as crypto from 'crypto'; import { sha256, totp } from '../common/core'; import { AuthGuard, CurrentUser } from '../common/guards'; import { rateGet, rateIncr } from '../common/redis'; import { adminIpAllowed } from '../common/admin-ip';
 const ACCESS_SECRET=()=>process.env.JWT_ACCESS_SECRET||'dev-access-secret-change-me-32ch';
 function cookies(res:any, access:string, refresh:string){
   // Secure cookies only when explicitly enabled (needs HTTPS). Plain HTTP Hostinger deploy must keep this false.
@@ -12,8 +12,8 @@ function clientIp(req:any){ const real=String(req.headers?.['x-real-ip']||'').tr
 function uaOf(req:any){ return String(req?.headers?.['user-agent']||'').slice(0,300); }
 function describeUa(ua?:string|null){ const s=String(ua||''); if(!s) return 'Unknown device'; let os='Unknown system'; if(/iPhone|iPad|iPod/i.test(s)) os='iPhone'; else if(/Android/i.test(s)) os='Android'; else if(/Mac OS X/i.test(s)) os='Mac'; else if(/Windows NT/i.test(s)) os='Windows'; else if(/Linux/i.test(s)) os='Linux'; let browser='Browser'; if(/Edg\//i.test(s)) browser='Edge'; else if(/Chrome\//i.test(s)&&!/Edg/i.test(s)) browser='Chrome'; else if(/Safari\//i.test(s)&&!/Chrome/i.test(s)) browser='Safari'; else if(/Firefox\//i.test(s)) browser='Firefox'; return `${browser} on ${os}`; }
 function recentLogins(key:string){ const now=Date.now(); const arr=(loginHits.get(key)||[]).filter(t=>now-t<60_000); loginHits.set(key,arr); return arr; }
-function overLoginLimit(key:string){ return recentLogins(key).length>=2; }
-function recordLogin(key:string){ recentLogins(key).push(Date.now()); }
+async function overLoginLimit(key:string){ const n=await rateGet('login:'+key); if(n!=null) return n>=2; return recentLogins(key).length>=2; }
+async function recordLogin(key:string){ const n=await rateIncr('login:'+key,60); if(n==null) recentLogins(key).push(Date.now()); }
 function totpOk(secret:string, code:string){ const c=String(code||'').replace(/\s/g,''); const now=Date.now(); return [now-30000,now,now+30000].some(t=>totp(secret,t)===c); }
 async function retireDemoPassword(p:PrismaService, userId:string){ await p.user.update({where:{id:userId},data:{passwordHash:await bcrypt.hash(crypto.randomBytes(32).toString('hex'),12),tokenVersion:{increment:1}}}); await p.session.updateMany({where:{userId,revokedAt:null},data:{revokedAt:new Date()}}); }
 @ApiTags('auth') @Controller('auth') export class AuthController { constructor(private p: PrismaService){}
@@ -26,22 +26,23 @@ async function retireDemoPassword(p:PrismaService, userId:string){ await p.user.
   const mobile=raw.replace(/\D/g,'').slice(-10);
   if(!raw||!password) throw new BadRequestException('Email or member ID and password are required');
   const ip=clientIp(req);
-  if(overLoginLimit('ip:'+ip)||(email&&overLoginLimit('email:'+email))) throw new HttpException('Too many login attempts. Only 2 attempts are allowed per minute.',429);
-  const mark=()=>{ recordLogin('ip:'+ip); if(email) recordLogin('email:'+email); };
+  if(await overLoginLimit('ip:'+ip)||(email&&await overLoginLimit('email:'+email))) throw new HttpException('Too many login attempts. Only 2 attempts are allowed per minute.',429);
+  const mark=async()=>{ await recordLogin('ip:'+ip); if(email) await recordLogin('email:'+email); };
   let u:any=null;
   if(raw.includes('@')) u=await this.p.user.findFirst({where:{email:{equals:email,mode:'insensitive'}}});
   else if(mobile.length===10) u=await this.p.user.findFirst({where:{phone:mobile}});
   else { const code=raw.toUpperCase().replace(/\s/g,''); const merch=await this.p.merchantProfile.findFirst({where:{memberCode:code}}); if(merch){ const mem=await this.p.membership.findFirst({where:{orgId:merch.orgId,role:'MERCHANT_OWNER'},include:{user:true}}); u=mem?.user||null; } }
-  if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ mark(); throw new UnauthorizedException('Invalid email or password'); }
+  if(!u||!u.isActive||!(await bcrypt.compare(password,u.passwordHash))){ await mark(); throw new UnauthorizedException('Invalid email or password'); }
   const staff=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT'];
   const memberships=await this.p.membership.findMany({where:{userId:u.id},select:{role:true}});
   const isStaff=memberships.some(m=>staff.includes(m.role));
+  if(isStaff&&!adminIpAllowed(ip)) throw new ForbiddenException('Admin sign-in is limited to allowlisted IPs');
   if(isStaff&&u.mfaEnabled){
     const code=String(b.totp||'').replace(/\s/g,'');
     if(!code) throw new UnauthorizedException('Authenticator code required');
-    if(!u.mfaSecret||!totpOk(u.mfaSecret,code)){ mark(); throw new UnauthorizedException('Invalid authenticator code'); }
+    if(!u.mfaSecret||!totpOk(u.mfaSecret,code)){ await mark(); throw new UnauthorizedException('Invalid authenticator code'); }
   }
-  mark();
+  await mark();
   await this.p.auditLog.create({data:{actorId:u.id,action:'LOGIN',entity:'User',entityId:u.id,ip:req.ip}});
   const issued=await this.issue(u,res,req);
   return {...issued,mfaEnrollmentRequired:isStaff&&!u.mfaEnabled}; }
