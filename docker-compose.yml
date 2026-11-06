@@ -123,8 +123,10 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-    entrypoint: ["/bin/sh", "-c"]
-    command: "while true; do /bin/sh /pg-backup.sh || echo backup_failed; sleep ${BACKUP_INTERVAL_SEC:-86400}; done"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - while true; do /bin/sh /pg-backup.sh || echo backup_failed; sleep ${BACKUP_INTERVAL_SEC:-86400}; done
 volumes:
   pgdata: {}
   pgwal: {}
