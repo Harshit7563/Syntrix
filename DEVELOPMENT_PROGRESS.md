@@ -16,7 +16,7 @@ docker compose   postgres, redis, api, worker, web
 ```
 
 **Money path:** merchant `X-Api-Key` → `/api/v1/payins|payouts|refunds` → routing rules → `ProviderAdapter` (ORVIAN / mock / generic HTTP) → integer-paise double-entry ledger → outbox → merchant webhooks (HMAC).  
-**Admin path:** `/root/7563` (temporary open admin).  
+**Admin path:** `/root/7563` (email + password).  
 **Merchant path:** `/app/merchants/login` (Member ID + password).
 
 Do not rewrite this into microservices, shadcn, or Zustand in one pass. Preserve live ORVIAN, cookies, and merchant-desk.
@@ -53,7 +53,7 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 
 1. GitHub Actions CI, Prometheus/Grafana, automated DB backups in-compose (backup docs exist)
 2. Merchant nav missing Webhooks + Docs (pages exist)
-3. Support role, dedicated beneficiaries API, maker-checker UI, T+N settlement productisation
+3. Support role, Grafana, extra design-system pass
 4. Refresh-token rotation (WIP in working tree — do not ship the large auth rewrite as-is)
 5. shadcn/Zustand/RHF/Zod/Recharts/Lucide stack swap — **not Phase 1**; keep current UI
 6. Public `/api/v1/payin/orders` aliases — live contract is `/api/v1/payins` (keep; add aliases later if needed)
@@ -64,12 +64,23 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 
 | Phase | Goal | Status |
 |---|---|---|
-| 1 | Assess repo, document architecture, CI, merchant portal links | **in progress** |
+| 1 | Assess repo, document architecture, CI, merchant portal links | **done** |
 | 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | **done** |
-| 3 | Settlement/recon product polish, beneficiary registry, maker-checker | pending |
+| 3 | Settlement/recon product polish, beneficiary registry, maker-checker | **done** |
 | 4 | Observability (metrics, structured log pipeline, backup job) | pending |
 | 5 | Frontend design-system pass (only if product asks) | pending |
 | 6 | Production-readiness review (no certification claims) | pending |
+
+## Phase 3 this increment
+
+- [x] Beneficiary registry (`/merchant/beneficiaries`, `/api/v1/beneficiaries`) — encrypted account, last4, no fake penny-drop
+- [x] Payouts accept `beneficiaryId`
+- [x] T+0…T+3 settlement batches: collections → payout wallet after calendar delay, capped by wallet hold
+- [x] Maker-checker execute for refunds above ₹500 (`POST /admin/approvals/:id/decide`)
+- [x] Settlement maker-checker (Super Admin may post own batch on a solo desk)
+- [x] Recon UI shows REVIEW exceptions
+- [ ] Automated bank-statement import — not in this phase
+- [ ] Penny-drop verification — not implemented (must not be claimed)
 
 ## Phase 2 this increment
 

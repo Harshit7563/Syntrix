@@ -4,9 +4,10 @@ import { feePaise, nextStatus, sha256, stableStringify, pickRouteByAmount, circu
 import { adapterFor, hasCapability, ProviderTimeoutError, activeProviderCreds } from './providers';
 import { LedgerService, acct } from './ledger.service';
 import { TxnEventsService } from './txn-events.service';
+import { BeneficiariesService } from './beneficiaries.service';
 
 @Injectable() export class PaymentsService {
-  constructor(private p: PrismaService, private ledger: LedgerService, private live: TxnEventsService) {}
+  constructor(private p: PrismaService, private ledger: LedgerService, private live: TxnEventsService, private beneficiaries: BeneficiariesService) {}
 
   private async memberFor(merchantId: string, memberId?: string) {
     const id = String(memberId || '').trim();
@@ -337,6 +338,7 @@ import { TxnEventsService } from './txn-events.service';
       if (prior.requestHash !== reqHash) throw new ConflictException('Idempotency-Key reused with a different payload');
       return prior.response;
     }
+    body = await this.beneficiaries.resolveForPayout(merchant.id, body);
     const linkedMemberId = await this.memberFor(merchant.id, body.memberId);
     const product = await this.checkAccess(merchant.id, env, 'PAYOUT');
     const price = await this.pricing(merchant.id, product.id);
@@ -547,23 +549,39 @@ import { TxnEventsService } from './txn-events.service';
       const ap = await this.p.pendingApproval.create({
         data: {
           kind: 'REFUND',
-          payload: { merchantId: merchant.id, transactionId: orig.id, amountPaise: amount, merchantRef: body.merchantRef },
+          payload: { merchantId: merchant.id, env, transactionId: orig.id, amountPaise: amount, merchantRef: body.merchantRef },
           requestedBy: 'api',
         },
       });
       return { status: 'PENDING_APPROVAL', approvalId: ap.id, message: 'Refunds above ₹500 require maker-checker approval' };
     }
+    return this.performRefund(merchant, orig, amount, body.merchantRef, env);
+  }
+
+  async executeApprovedRefund(payload: any) {
+    const merchant = await this.p.merchantProfile.findUnique({ where: { id: payload.merchantId } });
+    if (!merchant) throw new BadRequestException('Merchant not found for this refund approval');
+    const orig = await this.p.transaction.findFirst({ where: { id: payload.transactionId, merchantId: merchant.id } });
+    if (!orig) throw new BadRequestException('Original pay-in not found');
+    if (!['SUCCESS', 'PARTIALLY_REFUNDED'].includes(orig.status)) {
+      throw new BadRequestException('Only a successful pay-in can be refunded');
+    }
+    const amount = Number(payload.amountPaise);
+    return this.performRefund(merchant, orig, amount, payload.merchantRef, payload.env || orig.env);
+  }
+
+  private async performRefund(merchant: any, orig: any, amount: number, merchantRef: string, env: string) {
     const provider = await this.providerForRefund(orig);
     const result = await adapterFor(provider, await activeProviderCreds(this.p, provider.id)).createRefund({
       paymentRef: orig.providerRef || orig.id,
       amountPaise: amount,
-      merchantRef: body.merchantRef,
+      merchantRef,
     });
     const refund = await this.p.$transaction(async tx => {
       const r = await tx.refund.create({
         data: {
           transactionId: orig.id,
-          merchantRef: body.merchantRef,
+          merchantRef,
           amountPaise: BigInt(amount),
           status: result.status,
           providerRef: result.providerRef,

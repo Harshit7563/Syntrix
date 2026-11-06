@@ -236,6 +236,45 @@ export function Credentials(){ const {data,isLoading,error}=useQ('creds','/merch
  <button type="button" onClick={()=>setReqSign(!reqSign)} className={`mt-3.5 w-full text-left rounded-xl border px-3.5 py-3 transition ${reqSign?'border-slate-900 bg-slate-900 text-white':'border-slate-200 bg-white text-slate-800 hover:border-slate-400'}`}><b className="text-[13px]">Signed payouts required</b><span className={`block text-xs mt-0.5 ${reqSign?'text-white/70':'text-slate-500'}`}>Every payout request must carry an HMAC signature made with a separate signing secret (5-minute window). A leaked API key alone cannot move money.</span><span className={`block text-[11.5px] font-bold mt-1.5 ${reqSign?'text-emerald-300':'text-slate-400'}`}>{reqSign?'On':'Off'}</span></button>
  <div className="flex flex-wrap gap-2 mt-3.5"><button className="btn !py-1.5" onClick={()=>saveShield(c)}>Save shield</button><button className="btn-ghost !py-1.5 !bg-white" onClick={()=>genSign(c)}>{c.hasSigningSecret?'Rotate signing secret':'Generate signing secret'}</button></div></div>}
  </div>)}</div></div>; }
+export function Beneficiaries(){
+  const list=useQ('mben','/merchant/beneficiaries');
+  const qc=useQueryClient();
+  const [f,setF]=useState({name:'',account:'',ifsc:'',mobile:'',email:''});
+  const [err,setErr]=useState('');
+  const save=useMutation({
+    mutationFn:()=>api('/merchant/beneficiaries',{method:'POST',body:f}),
+    onSuccess:()=>{ setErr(''); setF({name:'',account:'',ifsc:'',mobile:'',email:''}); qc.invalidateQueries({queryKey:['mben']}); },
+    onError:(e:any)=>setErr(e.message||'Could not save'),
+  });
+  return <div className="space-y-4">
+    <div className="card">
+      <h3 className="font-bold mb-1">Beneficiaries</h3>
+      <p className="text-[12.5px] text-slate-500 mb-3">Register payout accounts here, then send <code className="text-[12px]">beneficiaryId</code> on <code className="text-[12px]">POST /api/v1/payouts</code>. Verified is a staff mark only — not a bank penny-drop.</p>
+      <form className="flex flex-wrap gap-2 items-end" onSubmit={e=>{e.preventDefault(); save.mutate();}}>
+        <label className="block"><span className="label">Name</span><input className="input !w-40" value={f.name} onChange={e=>setF({...f,name:e.target.value})} required/></label>
+        <label className="block"><span className="label">Account</span><input className="input tnum !w-40" value={f.account} onChange={e=>setF({...f,account:e.target.value.replace(/\D/g,'')})} required/></label>
+        <label className="block"><span className="label">IFSC</span><input className="input !w-32" value={f.ifsc} onChange={e=>setF({...f,ifsc:e.target.value.toUpperCase()})} required/></label>
+        <label className="block"><span className="label">Mobile</span><input className="input tnum !w-32" value={f.mobile} onChange={e=>setF({...f,mobile:e.target.value.replace(/\D/g,'').slice(0,10)})}/></label>
+        <button className="btn" disabled={save.isPending}>{save.isPending?'Saving…':'Add'}</button>
+      </form>
+      {err&&<p className="text-[12.5px] text-rose-600 mt-2">{err}</p>}
+    </div>
+    <div className="card">
+      {!list.data?.length&&<p className="text-sm text-slate-500">No beneficiaries yet.</p>}
+      {(list.data||[]).map((b:any)=><div key={b.id} className="flex flex-wrap justify-between gap-2 border-b last:border-0 py-2.5 text-sm">
+        <span><b>{b.name}</b> · ••••{b.accountLast4} · {b.ifsc} · {b.status}{b.verified?' · marked verified':''}</span>
+        {b.status==='ACTIVE'&&<button className="text-rose-600 font-semibold" onClick={async()=>{ await api('/merchant/beneficiaries/'+b.id+'/disable',{method:'POST',body:{}}); qc.invalidateQueries({queryKey:['mben']}); }}>Disable</button>}
+      </div>)}
+    </div>
+  </div>;
+}
+export function MerchantSettlements(){
+  const {data}=useQ('mset','/merchant/settlements');
+  return <div className="card"><h3 className="font-bold mb-1">Settlements</h3><p className="text-sm text-slate-500 mb-3">T+N batches posted by finance. Internal ledger only — not a bank statement.</p>
+    {!data?.length&&<p className="text-sm text-slate-500">No settlement batches yet.</p>}
+    {(data||[]).map((b:any)=><div key={b.id} className="flex justify-between border rounded-xl px-4 py-3 mb-2 text-sm"><span>{b.status} · T+{b.settlementDays} · {b.txnCount} pay-ins</span><b>{inr(b.amountPaise)}</b></div>)}
+  </div>;
+}
 export function Catalog(){ const {data}=useQ('cat','/merchant/catalog'); const qc=useQueryClient(); return <div className="grid sm:grid-cols-2 gap-4">{(data||[]).map((p:any)=><div key={p.id} className="card"><div className="flex justify-between"><b>{p.name}</b><span className="badge bg-brand-50 text-brand-700">{p.code}</span></div><p className="text-sm text-slate-500 mt-1">{p.description}</p>{p.access?.length?p.access.map((a:any)=><div key={a.id} className="mt-2 text-sm">{a.env}: <Status s={a.status}/></div>):<button className="btn mt-3" onClick={async()=>{await api(`/merchant/catalog/${p.id}/request`,{method:'POST',body:{env:'sandbox'}});qc.invalidateQueries({queryKey:['cat']});}}>Request sandbox access</button>}</div>)}{!data?.length&&<Empty t="No products" h="Products appear after an admin publishes them."/>}</div>; }
 export function Webhooks(){ const {data}=useQ('hooks','/merchant/webhooks'); const del=useQ('del','/merchant/webhook-deliveries'); const [url,setUrl]=useState(''); const [secret,setSecret]=useState(''); const qc=useQueryClient(); return <div className="space-y-4"><div className="card"><h3 className="font-bold mb-3">Webhook endpoints</h3><div className="flex gap-2"><input className="input" placeholder="https://your-server.example/webhooks" value={url} onChange={e=>setUrl(e.target.value)}/><button className="btn" onClick={async()=>{const r=await api('/merchant/webhooks',{method:'POST',body:{url,env:'sandbox'}}); if(r.signingSecret)setSecret(r.signingSecret); qc.invalidateQueries({queryKey:['hooks']});}}>Add</button></div>{secret&&<p className="text-sm mt-2">Signing secret (once): <code>{secret}</code> — verify <code>x-syntrix-signature: t=…,v1=HMAC_SHA256(secret, "t.body")</code></p>}{(data||[]).map((w:any)=><div key={w.id} className="border rounded-xl px-3 py-2 mt-2 text-sm flex justify-between"><span>{w.url} ({w.env})</span><button className="text-brand-600 font-semibold" onClick={async()=>{const r=await api(`/merchant/webhooks/${w.id}/rotate-secret`,{method:'POST',body:{}});setSecret(r.signingSecret);}}>Rotate secret</button></div>)}</div><div className="card"><h3 className="font-bold mb-3">Delivery history</h3>{!del.data?.length?<Empty t="No deliveries yet" h="Deliveries appear after your first transaction event."/>:del.data.map((d:any)=><div key={d.id} className="flex justify-between border-b py-2 text-sm"><span>{d.event?.type} · attempts {d.attempts}</span><span className="flex gap-2 items-center"><Status s={d.status}/>{['FAILED','DEAD_LETTER'].includes(d.status)&&<button className="text-brand-600 font-semibold" onClick={async()=>{await api(`/merchant/webhook-deliveries/${d.id}/replay`,{method:'POST',body:{}});qc.invalidateQueries({queryKey:['del']});}}>Replay</button>}</span></div>)}</div></div>; }
 export function Billing(){ const {data}=useQ('inv','/merchant/invoices'); const qc=useQueryClient(); return <div className="card"><div className="flex justify-between mb-3"><h3 className="font-bold">Invoices &amp; billing</h3><button className="btn" onClick={async()=>{await api('/merchant/invoices/generate',{method:'POST',body:{}});qc.invalidateQueries({queryKey:['inv']});}}>Generate this month's invoice</button></div>{!data?.length?<Empty t="No invoices" h="Generate an invoice from your API usage fees."/>:data.map((i:any)=><div key={i.id} className="flex justify-between border rounded-xl px-4 py-3 mb-2"><span>{i.number} · {i.period}</span><b>{inr(i.totalPaise)}</b><Status s={i.status}/></div>)}</div>; }

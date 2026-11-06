@@ -966,8 +966,71 @@ export function AdminApiReport({endpoint}:{endpoint?:string}={}){
     </div>}
   </div>;
 }
-export function AdminApprovals(){ const {data}=useQ('aappr','/admin/pending-approvals'); const qc=useQueryClient(); return <div className="card"><h3 className="font-bold mb-3">Maker-checker queue</h3><p className="text-sm text-slate-500 mb-3">Sensitive changes, large refunds and payouts need a second approver — the requester cannot approve their own item.</p>{!data?.length&&<p className="text-sm text-slate-500">Nothing awaiting a checker.</p>}{data?.map((a:any)=><div key={a.id} className="flex justify-between border rounded-xl px-4 py-3 mb-2 text-sm"><span><b>{a.kind}</b> · {JSON.stringify(a.payload).slice(0,120)}</span><span className="flex gap-2"><button className="text-emerald-600 font-semibold" onClick={async()=>{await api(`/admin/pending-approvals/${a.id}/decide`,{method:'POST',body:{approve:true}});qc.invalidateQueries();}}>Approve</button><button className="text-red-600 font-semibold" onClick={async()=>{await api(`/admin/pending-approvals/${a.id}/decide`,{method:'POST',body:{approve:false}});qc.invalidateQueries();}}>Reject</button></span></div>)}</div>; }
-export function AdminRecon(){ const runs=useQ('arecon','/admin/reconciliation'); const qc=useQueryClient(); return <div className="card"><div className="flex justify-between mb-3"><h3 className="font-bold">Reconciliation</h3><button className="btn" onClick={async()=>{await api('/admin/reconcile',{method:'POST',body:{}});qc.invalidateQueries({queryKey:['arecon']});}}>Run reconciliation</button></div>{runs.data?.map((r:any)=><div key={r.id} className="border rounded-xl px-4 py-3 mb-2 text-sm"><b>{r.status}</b> · {new Date(r.startedAt).toLocaleString()} · {r.items?.length||0} items checked</div>)}{!runs.data?.length&&<p className="text-sm text-slate-500">No runs yet. Reconciliation resolves UNKNOWN transactions by checking provider status — it never re-creates a payout.</p>}</div>; }
+export function AdminApprovals(){
+  const {data}=useQ('aappr','/admin/approvals');
+  const qc=useQueryClient();
+  const decide=async(id:string,approve:boolean)=>{ try{ await api(`/admin/approvals/${id}/decide`,{method:'POST',body:{approve}}); qc.invalidateQueries(); }catch(e:any){ alert(e.message); } };
+  return <div className="card"><h3 className="font-bold mb-3">Maker-checker queue</h3><p className="text-sm text-slate-500 mb-3">Refunds above ₹500 and T+N settlement batches need a checker. The requester cannot approve their own item (except Super Admin posting a settlement on a solo desk).</p>{!data?.length&&<p className="text-sm text-slate-500">Nothing awaiting a checker.</p>}{data?.map((a:any)=><div key={a.id} className="flex flex-wrap justify-between gap-2 border rounded-xl px-4 py-3 mb-2 text-sm"><span><b>{a.kind}</b> · {JSON.stringify(a.payload).slice(0,160)}</span><span className="flex gap-2"><button className="text-emerald-600 font-semibold" onClick={()=>decide(a.id,true)}>Approve</button><button className="text-red-600 font-semibold" onClick={()=>decide(a.id,false)}>Reject</button></span></div>)}</div>;
+}
+export function AdminSettlements(){
+  const desk=useQ('merchant-desk','/merchant-desk');
+  const list=useQ('asettle','/admin/settlements');
+  const qc=useQueryClient();
+  const [mid,setMid]=useState('');
+  const preview=useQuery({queryKey:['settle-preview',mid],queryFn:()=>api('/admin/settlements/preview?merchantId='+mid),enabled:!!mid});
+  const [days,setDays]=useState('1');
+  const [err,setErr]=useState('');
+  const merchants=Array.isArray(desk.data)?desk.data:[];
+  return <div className="space-y-4">
+    <div className="card">
+      <h3 className="font-bold mb-1">Settlements</h3>
+      <p className="text-sm text-slate-500 mb-3">Moves eligible successful pay-ins from collections to the payout wallet after T+N. This is the internal ledger — not a bank settlement file.</p>
+      <div className="flex flex-wrap gap-2 items-end">
+        <label className="block"><span className="label">Merchant</span>
+          <select className="input !w-56" value={mid} onChange={e=>setMid(e.target.value)}>
+            <option value="">Select…</option>
+            {merchants.map((m:any)=><option key={m.id} value={m.id}>{m.businessName}</option>)}
+          </select>
+        </label>
+        <label className="block"><span className="label">T+N</span>
+          <select className="input !w-28" value={days} onChange={e=>setDays(e.target.value)}>
+            <option value="0">T+0</option><option value="1">T+1</option><option value="2">T+2</option><option value="3">T+3</option>
+          </select>
+        </label>
+        <button className="btn" type="button" disabled={!mid} onClick={async()=>{ setErr(''); try{ await api('/admin/settlements/merchants/'+mid+'/days',{method:'POST',body:{settlementDays:Number(days)}}); qc.invalidateQueries({queryKey:['settle-preview',mid]}); }catch(e:any){ setErr(e.message);} }}>Save cycle</button>
+        <button className="btn" type="button" disabled={!mid||!preview.data?.pickedCount} onClick={async()=>{ setErr(''); try{ await api('/admin/settlements',{method:'POST',body:{merchantId:mid}}); qc.invalidateQueries(); }catch(e:any){ setErr(e.message);} }}>Create batch</button>
+      </div>
+      {preview.data&&<p className="text-[13px] text-slate-600 mt-3">Eligible {preview.data.eligibleCount} · batch {preview.data.pickedCount} · {inr(preview.data.amountPaise)} · free after hold {inr(preview.data.freePaise)} · T+{preview.data.settlementDays}</p>}
+      {err&&<p className="text-[12.5px] text-rose-600 mt-2">{err}</p>}
+    </div>
+    <div className="card">
+      <h3 className="font-bold mb-3">Batches</h3>
+      {!list.data?.length&&<p className="text-sm text-slate-500">No batches yet.</p>}
+      {(list.data||[]).map((b:any)=><div key={b.id} className="border rounded-xl px-4 py-3 mb-2 text-sm">
+        <div className="flex flex-wrap justify-between gap-2">
+          <span><b>{b.businessName||b.merchantId}</b> · {b.status} · {inr(b.amountPaise)} · {b.txnCount} txns · T+{b.settlementDays}</span>
+          {b.status==='PENDING'&&<span className="flex gap-2">
+            <button className="text-emerald-600 font-semibold" onClick={async()=>{ try{ await api('/admin/settlements/'+b.id+'/post',{method:'POST',body:{}}); qc.invalidateQueries(); }catch(e:any){ alert(e.message);} }}>Post</button>
+            <button className="text-red-600 font-semibold" onClick={async()=>{ try{ await api('/admin/settlements/'+b.id+'/reject',{method:'POST',body:{}}); qc.invalidateQueries(); }catch(e:any){ alert(e.message);} }}>Reject</button>
+          </span>}
+        </div>
+        <p className="text-[12px] text-slate-400 mt-1">{b.note}</p>
+      </div>)}
+    </div>
+  </div>;
+}
+export function AdminRecon(){
+  const runs=useQ('arecon','/admin/reconciliation');
+  const qc=useQueryClient();
+  const [open,setOpen]=useState<string>('');
+  return <div className="card"><div className="flex justify-between mb-3"><h3 className="font-bold">Reconciliation</h3><button className="btn" onClick={async()=>{await api('/admin/reconcile',{method:'POST',body:{}});qc.invalidateQueries({queryKey:['arecon']});}}>Run reconciliation</button></div>
+  <p className="text-sm text-slate-500 mb-3">Checks provider status for UNKNOWN/PROCESSING. It never re-creates a payout. REVIEW items need a person to look at them.</p>
+  {runs.data?.map((r:any)=>{ const review=(r.items||[]).filter((i:any)=>i.status==='REVIEW'); return <div key={r.id} className="border rounded-xl px-4 py-3 mb-2 text-sm">
+    <button type="button" className="w-full text-left" onClick={()=>setOpen(open===r.id?'':r.id)}><b>{r.status}</b> · {new Date(r.startedAt).toLocaleString()} · {r.items?.length||0} checked · <span className={review.length?'text-amber-700 font-semibold':''}>{review.length} exceptions</span></button>
+    {open===r.id&&(r.items||[]).map((i:any)=><p key={i.id} className="mt-1 text-[12.5px] text-slate-600">{i.status} · {i.note||'—'} · {i.providerRef||'no provider ref'}</p>)}
+  </div>; })}
+  {!runs.data?.length&&<p className="text-sm text-slate-500">No runs yet.</p>}</div>;
+}
 export function AdminAudit(){ const {data}=useQ('aaudit','/admin/audit'); return <div className="card"><h3 className="font-bold mb-3">Audit trail</h3>{data?.map((a:any)=><p key={a.id} className="text-sm border-b py-2"><b>{a.action}</b> · {a.entity} {a.entityId?.slice(0,8)} <span className="text-slate-400">{new Date(a.createdAt).toLocaleString()}</span></p>)}</div>; }
 
 export function AdminTestApi(){

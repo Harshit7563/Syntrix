@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {MemberLogin,AdminEnter} from './pages/Auth';import {BawjiPay} from './pages/BawjiPay';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground} from './pages/Merchant';import {AdminDashboard,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs} from './pages/Admin';import {MerchantDesk} from './pages/Members';import {Settings} from './pages/Settings';
+import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {MemberLogin,AdminEnter} from './pages/Auth';import {BawjiPay} from './pages/BawjiPay';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground,Beneficiaries,MerchantSettlements} from './pages/Merchant';import {AdminDashboard,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs,AdminSettlements} from './pages/Admin';import {MerchantDesk} from './pages/Members';import {Settings} from './pages/Settings';
 
 const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']);
 const isStaff=(role?:string)=>!!role&&STAFF.has(role);
@@ -42,12 +42,17 @@ function AppShell(){
     ['/app/providers','APIs',I.shield],
     ['/app/logs','Logs',I.doc],
     ['/app/merchants','Merchant',I.users],
+    ['/app/approvals','Approvals',I.shield],
+    ['/app/settlements','Settlements',I.chart],
+    ['/app/reconciliation','Recon',I.chart],
     ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
   ]:[
     ['/app','Home',I.home],
     ['/app/pay-in','Pay-in',I.box],
     ['/app/payouts','Payouts',I.card],
+    ['/app/beneficiaries','Beneficiaries',I.users],
+    ['/app/settlements','Settlements',I.chart],
     ['/app/transactions','Transactions',I.txn],
     ['/app/credentials','Keys',I.key],
     ['/app/webhooks','Webhooks',I.hook],
@@ -64,12 +69,16 @@ function AppShell(){
     ['/app/providers','APIs'],
     ['/app/logs','Logs'],
     ['/app/merchants','Merchant'],
+    ['/app/approvals','Approvals'],
+    ['/app/settlements','Settlements'],
     ['/app/playground','Docs'],
     ['/app/settings','Settings'],
   ]:[
     ['/app','Home'],
     ['/app/pay-in','Pay-in'],
     ['/app/payouts','Payouts'],
+    ['/app/beneficiaries','Beneficiaries'],
+    ['/app/settlements','Settlements'],
     ['/app/transactions','Transactions'],
     ['/app/credentials','Keys'],
     ['/app/webhooks','Webhooks'],
@@ -144,6 +153,8 @@ function AppShell(){
             <Route path="members" element={<Navigate to="/app/merchants" replace/>}/>
             <Route path="approvals" element={<AdminApprovals/>}/>
             <Route path="reconciliation" element={<AdminRecon/>}/>
+            <Route path="settlements" element={admin?<AdminSettlements/>:<MerchantSettlements/>}/>
+            <Route path="beneficiaries" element={<Beneficiaries/>}/>
             <Route path="audit" element={<AdminAudit/>}/>
             <Route path="onboarding" element={<Onboarding/>}/>
             <Route path="catalog" element={<Catalog/>}/>

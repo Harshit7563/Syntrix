@@ -147,6 +147,8 @@ model MerchantProfile {
   loginPasswordEnc           String?
   /// Short id for merchant portal login, e.g. M482193.
   memberCode                 String?             @unique
+  /// Calendar days after a successful pay-in before it may move to the payout wallet. 0 = T+0.
+  settlementDays             Int                 @default(1)
   directors                  Director[]
   owners                     BeneficialOwner[]
   bankAccounts               BankAccount[]
@@ -162,6 +164,8 @@ model MerchantProfile {
   usage                      UsageRecord[]
   members                    PortalMember[]
   slabs                      CommissionSlab[]
+  beneficiaries              Beneficiary[]
+  settlementBatches          SettlementBatch[]
   createdAt                  DateTime            @default(now())
   updatedAt                  DateTime            @updatedAt
 
@@ -445,8 +449,9 @@ model Transaction {
   failureReason String?
   parentId      String?
   attempts      TransactionAttempt[]
-  refunds       Refund[]
-  createdAt     DateTime             @default(now())
+  refunds           Refund[]
+  settlementItems   SettlementItem[]
+  createdAt         DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
   @@unique([merchantId, env, merchantRef])
@@ -608,6 +613,57 @@ model OutboxEvent {
   createdAt   DateTime  @default(now())
 
   @@index([status, createdAt])
+}
+
+model Beneficiary {
+  id                 String          @id @default(cuid())
+  merchantId         String
+  merchant           MerchantProfile @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name               String
+  accountEnc         String
+  accountLast4       String
+  accountFingerprint String
+  ifsc               String
+  mobile             String?
+  email              String?
+  /// Staff-marked only. Not proof of a bank penny-drop.
+  verified           Boolean         @default(false)
+  status             String          @default("ACTIVE")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([merchantId, accountFingerprint])
+  @@index([merchantId, status])
+}
+
+model SettlementBatch {
+  id              String           @id @default(cuid())
+  merchantId      String
+  merchant        MerchantProfile  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  settlementDays  Int
+  status          String           @default("PENDING")
+  amountPaise     BigInt           @default(0)
+  txnCount        Int              @default(0)
+  requestedBy     String?
+  approvedBy      String?
+  reason          String?
+  postedAt        DateTime?
+  items           SettlementItem[]
+  createdAt       DateTime         @default(now())
+
+  @@index([merchantId, status])
+}
+
+model SettlementItem {
+  id            String          @id @default(cuid())
+  batchId       String
+  batch         SettlementBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  transactionId String
+  transaction   Transaction     @relation(fields: [transactionId], references: [id])
+  amountPaise   BigInt
+
+  @@unique([transactionId])
+  @@index([batchId])
 }
 
 model ReconciliationRun {
