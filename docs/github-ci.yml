@@ -20,6 +20,6 @@ jobs:
       - run: npx prisma generate --schema apps/api/prisma/schema.prisma
       - run: npx tsc -p apps/api/tsconfig.build.json --noEmit
       - run: npx tsc -p apps/web/tsconfig.json --noEmit
-      - run: npm test --workspace=@syntrix/api
+      - run: npm test --workspace=@syntrix/api -- --watchman=false
         env:
           NODE_ENV: test

@@ -13,6 +13,7 @@ enum Role {
   COMPLIANCE
   OPERATIONS
   ACCOUNTS
+  SUPPORT
   MERCHANT_OWNER
   MERCHANT_DEVELOPER
   MERCHANT_VIEWER
@@ -686,6 +687,32 @@ model ReconciliationItem {
   actualPaise   BigInt?
   status        String
   note          String?
+}
+
+model BankStatementImport {
+  id         String              @id @default(cuid())
+  filename   String
+  uploadedBy String
+  status     String              @default("PARSED")
+  lineCount  Int                 @default(0)
+  matched    Int                 @default(0)
+  unmatched  Int                 @default(0)
+  note       String?
+  lines      BankStatementLine[]
+  createdAt  DateTime            @default(now())
+}
+
+model BankStatementLine {
+  id              String              @id @default(cuid())
+  importId        String
+  import          BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  txnDate         DateTime?
+  amountPaise     BigInt
+  utr             String?
+  narration       String?
+  status          String
+  transactionId   String?
+  note            String?
 }
 
 model UsageRecord {

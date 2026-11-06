@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import {api} from '../api';
 import {Alert} from './Auth';
 
-const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']);
+const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT']);
 
 const Copy=({v}:{v:string})=>{
   const [c,setC]=useState(false);
@@ -47,7 +47,7 @@ export function Settings(){
     finally{ setBusy(''); }
   };
   const setupMfa=async()=>{ if(u.mfaEnabled){ setMsg('Authenticator is already on'); return; } const r=await api('/auth/mfa/setup',{method:'POST',body:{}}); setMfaSecret(r.secret); setMfaQr(await QRCode.toDataURL(r.otpauth,{width:280,margin:1,errorCorrectionLevel:'M',color:{dark:'#111111',light:'#ffffff'}})); setMsg('Scan the QR with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code'); };
-  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('Authenticator is on. Next sign-in will ask for the code.'); setMfaSecret(''); setMfaQr(''); qc.invalidateQueries({queryKey:['me-set']}); }catch(e:any){ setMsg(e.message); } };
+  const verifyMfa=async()=>{ try{ await api('/auth/mfa/verify',{method:'POST',body:{totp:code}}); setMsg('Authenticator is on. Next sign-in will ask for the code.'); setMfaSecret(''); setMfaQr(''); qc.invalidateQueries({queryKey:['me-set']}); qc.invalidateQueries({queryKey:['me']}); }catch(e:any){ setMsg(e.message); } };
   if(me.isLoading) return <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{[1,2].map(i=><div key={i} className="h-40 rounded-[16px] bg-slate-200/50 animate-pulse"/>)}</div>;
 
   return <div className="w-full h-[calc(100vh-150px)] min-h-[560px] flex flex-col gap-4">
@@ -59,6 +59,7 @@ export function Settings(){
       <button type="button" className="h-9 px-4 rounded-full border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 hover:bg-slate-50" onClick={async()=>{ await api('/auth/logout',{method:'POST',body:{}}); location.href=staff?'/root/7563':'/app/merchants/login'; }}>Sign out</button>
     </div>
 
+    {staff&&!u.mfaEnabled&&<div className="shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">Admin ke liye authenticator set up karo. Dusre admin pages tab tak band hain.</div>}
     {msg&&<div className="shrink-0"><Alert>{msg}</Alert></div>}
 
     <div className="flex-1 min-h-0 bg-white rounded-[16px] border border-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,.03)] overflow-hidden flex flex-col">

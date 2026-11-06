@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';import {Routes,Route,NavLink,Navigate,useNavigate,useLocation} from 'react-router-dom';import {useQuery} from '@tanstack/react-query';import {api} from './api';import {MemberLogin,AdminEnter} from './pages/Auth';import {BawjiPay} from './pages/BawjiPay';import {MerchantDashboard,Onboarding,Credentials,Catalog,Transactions,Webhooks,Billing,Playground,Beneficiaries,MerchantSettlements} from './pages/Merchant';import {AdminDashboard,AdminProviders,AdminTxns,AdminApiReport,AdminApprovals,AdminRecon,AdminAudit,AdminTestApi,AdminApiLogs,AdminSettlements} from './pages/Admin';import {MerchantDesk} from './pages/Members';import {Settings} from './pages/Settings';
 
-const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']);
+const STAFF=new Set(['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT']);
 const isStaff=(role?:string)=>!!role&&STAFF.has(role);
 
 const I={home:'M3 10.5 12 3l9 7.5V21h-6v-6h-6v6H3z',txn:'M4 7h13l-3-3M20 17H7l3 3',box:'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',key:'M21 2l-2 2m-7 7H4v4H2v-4L13.5-.5a5.5 5.5 0 017 7L21 2zM16 8l3 3',hook:'M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.7 1.7M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.7-1.7',card:'M2 8a2 2 0 012-2h16a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2zM2 10h20',doc:'M6 2h9l5 5v15H6zM14 2v6h6',chart:'M3 3v18h18M8 17V9m5 8V5m5 12v-6',shield:'M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z',gear:'M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 005 12a7 7 0 00.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6A7 7 0 0019 12z',play:'M6 4l14 8-14 8z',users:'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8'};
@@ -9,6 +9,10 @@ function RequireAuth({children}:{children:any}){
   const nav=useNavigate();
   const me=useQuery({queryKey:['me'],queryFn:()=>api('/auth/me'),retry:false});
   useEffect(()=>{ if(me.isError) nav('/app/merchants/login',{replace:true}); },[me.isError,nav]);
+  useEffect(()=>{
+    if(!me.data) return;
+    if(STAFF.has(me.data.role)&&!me.data.mfaEnabled&&!window.location.pathname.includes('/settings')) nav('/app/settings',{replace:true});
+  },[me.data,nav]);
   if(me.isLoading) return <div className="min-h-screen grid place-items-center text-slate-500 text-sm">Loading…</div>;
   if(me.isError||!me.data) return null;
   return children;
@@ -31,9 +35,20 @@ function AppShell(){
   const loc=useLocation();
   const me=useQuery({queryKey:['me'],queryFn:()=>api('/auth/me'),retry:false});
   const admin=isStaff(me.data?.role);
+  const support=me.data?.role==='SUPPORT';
   const toggle=()=>{ setOpen(v=>{ const n=!v; try{ localStorage.setItem('sx_sidebar',n?'1':'0'); }catch{} return n; }); };
 
-  const rail: [string,string,string][] = admin?[
+  const rail: [string,string,string][] = admin?(support?[
+    ['/app','Home',I.home],
+    ['/app/pay-in','Pay-in',I.box],
+    ['/app/payouts','Payouts',I.card],
+    ['/app/transactions','Transactions',I.txn],
+    ['/app/logs','Logs',I.doc],
+    ['/app/merchants','Merchant',I.users],
+    ['/app/audit','Audit',I.doc],
+    ['/app/playground','Docs',I.play],
+    ['/app/settings','Settings',I.gear],
+  ]:[
     ['/app','Home',I.home],
     ['/app/pay-in','Pay-in',I.box],
     ['/app/payouts','Payouts',I.card],
@@ -47,7 +62,7 @@ function AppShell(){
     ['/app/reconciliation','Recon',I.chart],
     ['/app/playground','Docs',I.play],
     ['/app/settings','Settings',I.gear],
-  ]:[
+  ]):[
     ['/app','Home',I.home],
     ['/app/pay-in','Pay-in',I.box],
     ['/app/payouts','Payouts',I.card],
@@ -60,7 +75,16 @@ function AppShell(){
     ['/app/settings','Settings',I.gear],
   ];
 
-  const topTabs: [string,string][] = admin?[
+  const topTabs: [string,string][] = admin?(support?[
+    ['/app','Home'],
+    ['/app/pay-in','Pay-in'],
+    ['/app/payouts','Payouts'],
+    ['/app/transactions','Transactions'],
+    ['/app/logs','Logs'],
+    ['/app/merchants','Merchant'],
+    ['/app/audit','Audit'],
+    ['/app/settings','Settings'],
+  ]:[
     ['/app','Home'],
     ['/app/pay-in','Pay-in'],
     ['/app/payouts','Payouts'],
@@ -73,7 +97,7 @@ function AppShell(){
     ['/app/settlements','Settlements'],
     ['/app/playground','Docs'],
     ['/app/settings','Settings'],
-  ]:[
+  ]):[
     ['/app','Home'],
     ['/app/pay-in','Pay-in'],
     ['/app/payouts','Payouts'],

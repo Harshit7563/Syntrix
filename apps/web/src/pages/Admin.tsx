@@ -1021,15 +1021,37 @@ export function AdminSettlements(){
 }
 export function AdminRecon(){
   const runs=useQ('arecon','/admin/reconciliation');
+  const stmts=useQ('bstmt','/admin/reconciliation/statements');
   const qc=useQueryClient();
   const [open,setOpen]=useState<string>('');
-  return <div className="card"><div className="flex justify-between mb-3"><h3 className="font-bold">Reconciliation</h3><button className="btn" onClick={async()=>{await api('/admin/reconcile',{method:'POST',body:{}});qc.invalidateQueries({queryKey:['arecon']});}}>Run reconciliation</button></div>
-  <p className="text-sm text-slate-500 mb-3">Checks provider status for UNKNOWN/PROCESSING. It never re-creates a payout. REVIEW items need a person to look at them.</p>
-  {runs.data?.map((r:any)=>{ const review=(r.items||[]).filter((i:any)=>i.status==='REVIEW'); return <div key={r.id} className="border rounded-xl px-4 py-3 mb-2 text-sm">
-    <button type="button" className="w-full text-left" onClick={()=>setOpen(open===r.id?'':r.id)}><b>{r.status}</b> · {new Date(r.startedAt).toLocaleString()} · {r.items?.length||0} checked · <span className={review.length?'text-amber-700 font-semibold':''}>{review.length} exceptions</span></button>
-    {open===r.id&&(r.items||[]).map((i:any)=><p key={i.id} className="mt-1 text-[12.5px] text-slate-600">{i.status} · {i.note||'—'} · {i.providerRef||'no provider ref'}</p>)}
-  </div>; })}
-  {!runs.data?.length&&<p className="text-sm text-slate-500">No runs yet.</p>}</div>;
+  const [note,setNote]=useState('');
+  const upload=async(file:File)=>{
+    setNote('Uploading…');
+    const fd=new FormData(); fd.append('file',file);
+    try{
+      const res=await fetch('/api/admin/reconciliation/statements',{method:'POST',credentials:'include',body:fd});
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.message||'Upload failed');
+      setNote(`Parsed ${data.lineCount} · matched ${data.matched} · unmatched ${data.unmatched}. Unmatched is not a failed payout.`);
+      qc.invalidateQueries({queryKey:['bstmt']});
+    }catch(e:any){ setNote(e.message); }
+  };
+  return <div className="space-y-4">
+    <div className="card"><div className="flex justify-between mb-3"><h3 className="font-bold">Provider reconciliation</h3><button className="btn" onClick={async()=>{await api('/admin/reconcile',{method:'POST',body:{}});qc.invalidateQueries({queryKey:['arecon']});}}>Run reconciliation</button></div>
+    <p className="text-sm text-slate-500 mb-3">Checks provider status for UNKNOWN/PROCESSING. It never re-creates a payout.</p>
+    {runs.data?.map((r:any)=>{ const review=(r.items||[]).filter((i:any)=>i.status==='REVIEW'); return <div key={r.id} className="border rounded-xl px-4 py-3 mb-2 text-sm">
+      <button type="button" className="w-full text-left" onClick={()=>setOpen(open===r.id?'':r.id)}><b>{r.status}</b> · {new Date(r.startedAt).toLocaleString()} · {r.items?.length||0} checked · <span className={review.length?'text-amber-700 font-semibold':''}>{review.length} exceptions</span></button>
+      {open===r.id&&(r.items||[]).map((i:any)=><p key={i.id} className="mt-1 text-[12.5px] text-slate-600">{i.status} · {i.note||'—'} · {i.providerRef||'no provider ref'}</p>)}
+    </div>; })}
+    {!runs.data?.length&&<p className="text-sm text-slate-500">No runs yet.</p>}</div>
+    <div className="card">
+      <h3 className="font-bold mb-1">Bank statement CSV</h3>
+      <p className="text-sm text-slate-500 mb-3">Headers: date, amount, utr. Match only — does not mark Syntrix txns successful.</p>
+      <input type="file" accept=".csv,text/csv" onChange={e=>{ const f=e.target.files?.[0]; if(f) upload(f); }}/>
+      {note&&<p className="text-[12.5px] text-slate-600 mt-2">{note}</p>}
+      {(stmts.data||[]).map((s:any)=><div key={s.id} className="border rounded-xl px-4 py-3 mt-2 text-sm"><b>{s.filename}</b> · {s.matched} matched · {s.unmatched} unmatched · {new Date(s.createdAt).toLocaleString()}</div>)}
+    </div>
+  </div>;
 }
 export function AdminAudit(){ const {data}=useQ('aaudit','/admin/audit'); return <div className="card"><h3 className="font-bold mb-3">Audit trail</h3>{data?.map((a:any)=><p key={a.id} className="text-sm border-b py-2"><b>{a.action}</b> · {a.entity} {a.entityId?.slice(0,8)} <span className="text-slate-400">{new Date(a.createdAt).toLocaleString()}</span></p>)}</div>; }
 
@@ -1216,7 +1238,7 @@ export function AdminApiLogs(){
   if(apiId) qs.set('providerId',apiId);
   if(kind) qs.set('kind',kind);
   const me=useQuery({queryKey:['me'],queryFn:()=>api('/auth/me'),retry:false});
-  const staff=!!me.data?.role&&['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS'].includes(me.data.role);
+  const staff=!!me.data?.role&&['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT'].includes(me.data.role);
   const logs=useQuery({queryKey:['apilogs',apiId,kind,staff],queryFn:()=>api((staff?'/admin/api-logs?':'/merchant/api-logs?')+qs.toString()),refetchInterval:15000,retry:false,enabled:me.isSuccess});
   const providers=useQuery({queryKey:['providers'],queryFn:()=>api('/admin/providers'),retry:false,enabled:staff});
   if(logs.error) return <Alert>{(logs.error as Error).message}</Alert>;

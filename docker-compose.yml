@@ -5,8 +5,19 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-syntrix}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syntrix_dev_pw}
       POSTGRES_DB: ${POSTGRES_DB:-syntrix}
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_timeout=60
+      - -c
+      - archive_command=test ! -f /wal/%f && cp %p /wal/%f
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - pgwal:/wal
     ports:
       - "127.0.0.1:5432:5432"
     healthcheck:
@@ -33,13 +44,14 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://syntrix:syntrix_dev_pw@postgres:5432/syntrix?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-syntrix}:${POSTGRES_PASSWORD:-syntrix_dev_pw}@postgres:5432/${POSTGRES_DB:-syntrix}?schema=public
       REDIS_URL: redis://redis:6379
       STORAGE_DRIVER: local
       LOCAL_STORAGE_PATH: /data/uploads
       PUBLIC_API_URL: ${PUBLIC_API_URL:-https://syntrixapi.in}
       WEB_ORIGIN: ${WEB_ORIGIN:-https://syntrixapi.in,https://www.syntrixapi.in}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      NODE_ENV: ${NODE_ENV:-production}
       API_PORT: "3001"
     volumes:
       - uploads:/data/uploads
@@ -64,10 +76,11 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://syntrix:syntrix_dev_pw@postgres:5432/syntrix?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-syntrix}:${POSTGRES_PASSWORD:-syntrix_dev_pw}@postgres:5432/${POSTGRES_DB:-syntrix}?schema=public
       REDIS_URL: redis://redis:6379
       STORAGE_DRIVER: local
       LOCAL_STORAGE_PATH: /data/uploads
+      NODE_ENV: ${NODE_ENV:-production}
       PROCESS_ROLE: worker
     volumes:
       - uploads:/data/uploads
@@ -114,6 +127,7 @@ services:
     command: "while true; do /bin/sh /pg-backup.sh || echo backup_failed; sleep ${BACKUP_INTERVAL_SEC:-86400}; done"
 volumes:
   pgdata: {}
+  pgwal: {}
   redisdata: {}
   uploads: {}
   pgbackups: {}

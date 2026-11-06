@@ -29,7 +29,7 @@ Do not rewrite this into microservices, shadcn, or Zustand in one pass. Preserve
 | Operations Admin | `OPERATIONS` |
 | Finance Admin | `ACCOUNTS` |
 | Compliance Officer | `COMPLIANCE` |
-| Support Executive | *missing* — do not invent until a Support module exists |
+| Support Executive | `SUPPORT` — read-only desk (no payout:approve) |
 | Merchant Admin | `MERCHANT_OWNER` |
 | Merchant Developer | `MERCHANT_DEVELOPER` |
 | Merchant Viewer | `MERCHANT_VIEWER` |
@@ -39,7 +39,7 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 ## What already works
 
 - Docker Compose, health `/health` + `/health/ready`, nginx, Prisma migrations
-- Auth cookies (`sx_access` / `sx_refresh`); MFA setup exists, login does not require TOTP
+- Auth cookies (`sx_access` / `sx_refresh`); staff MFA-on requires TOTP at login; staff without MFA must enroll before other admin APIs
 - Merchant desk: add merchant, auto Member ID + password, status toggle, edit popup
 - Merchant login, API keys, IP allowlist, payout shield, signing secrets
 - Pay-in / payout / refund v1, idempotency, UNKNOWN-safe payouts, circuit breaker
@@ -51,12 +51,12 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 
 ## Gaps vs enterprise spec (ordered)
 
-1. MFA not required at staff login; `/root/7563` is not IP-restricted
-2. GitHub Actions not installed (`docs/github-ci.yml` only)
-3. Support role, shadcn/Zustand rewrite — not started
+1. `/root/7563` is not IP-restricted
+2. GitHub Actions file is in `.github/workflows/ci.yml` — remote may still reject without `workflow` scope
+3. shadcn primitives only (Button/Input/Card) — not a full SPA rewrite
 4. Refresh-token WIP in the working tree — do not ship wholesale
-5. Single VPS; dump backups untested; no pentest
-6. Dirty local WIP (seed, guards, payments, mobile) must not be committed wholesale
+5. Single VPS; WAL archive configured, restore drill not done; no pentest executed
+6. Dirty local WIP (seed, payments, mobile) must not be committed wholesale
 
 ## Phases
 
@@ -66,7 +66,7 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 | 2 | Lock admin login, Member ID backfill, webhook+IP onboarding copy | **done** |
 | 3 | Settlement/recon product polish, beneficiary registry, maker-checker | **done** |
 | 4 | Observability (metrics, structured log pipeline, backup job) | **done** |
-| 5 | Frontend design-system pass (only if product asks) | **skipped** |
+| 5 | Frontend design-system pass (only if product asks) | **primitives only** |
 | 6 | Production-readiness review (no certification claims) | **done — not production-ready** |
 
 ## Phase 6 this increment
@@ -74,8 +74,12 @@ Permissions live in `packages/shared`. Staff APIs use `AuthGuard` + `StaffGuard`
 - [x] `docs/PRODUCTION_READINESS.md` — verdict **not production-ready**
 - [x] `docs/SECURITY_CHECKLIST.md` — controls vs gaps, no certification claims
 - [x] nginx: public `/metrics` and `/api/metrics` return 404
-- [x] Phase 5 shadcn pass skipped (not requested)
-- [ ] MFA-at-login, managed Postgres PITR, GitHub Actions, pentest — still open
+- [x] Phase 5 shadcn primitives (Button/Input/Card on login) — not a full redesign
+- [x] MFA-at-login when `mfaEnabled`; enroll gate for staff
+- [x] SUPPORT role (no money perms)
+- [x] Bank statement CSV match (does not auto-success ledger)
+- [x] Compose WAL archive + `scripts/pitr.md` — restore **not** drilled
+- [ ] Independent pentest — **not executed** (see `docs/SECURITY_REVIEW.md`)
 
 ## Phase 4 this increment
 

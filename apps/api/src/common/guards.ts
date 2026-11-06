@@ -7,22 +7,27 @@ export const CurrentUser = createParamDecorator((_d, ctx: ExecutionContext) => c
   const user = await this.prisma.user.findUnique({ where: { id: payload.sub }, include: { memberships: { include: { org: { include: { merchant: true } } } } } });
   if (!user || !user.isActive || user.tokenVersion !== payload.tv) throw new UnauthorizedException('Session revoked — please log in again');
   // Prefer platform staff membership if the user has more than one
-  const staffOrder=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS'];
+  const staffOrder=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT'];
   const m=[...user.memberships].sort((a,b)=>{ const ai=staffOrder.indexOf(a.role as string), bi=staffOrder.indexOf(b.role as string); if(ai===-1&&bi===-1) return 0; if(ai===-1) return 1; if(bi===-1) return -1; return ai-bi; })[0]||user.memberships[0];
   req.user = { id: user.id, email: user.email, role: (m?.role || 'MERCHANT_VIEWER') as Role, orgId: m?.orgId, merchantId: m?.org?.merchant?.id || null, mfaEnabled: user.mfaEnabled };
   if (!req.user.merchantId && staffOrder.includes(req.user.role)) {
     const rows = await this.prisma.merchantProfile.findMany({ select: { id: true, orgId: true }, take: 2 });
     if (rows.length === 1) { req.user.merchantId = rows[0].id; if (!req.user.orgId) req.user.orgId = rows[0].orgId; }
   }
+  if (staffOrder.includes(req.user.role) && !user.mfaEnabled) {
+    const path=String(req.path||req.url||'');
+    const allowed=/\/(me|logout|mfa\/setup|mfa\/verify)(\/|$|\?)/.test(path);
+    if (!allowed) throw new ForbiddenException('Set up authenticator before using admin');
+  }
   const perm = this.reflector.get<string>('perm', ctx.getHandler());
   if (perm && !can(req.user.role, perm)) throw new ForbiddenException(`Role ${req.user.role} lacks permission ${perm}`);
   return true; } }
-const STAFF_ROLES=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS'];
+const STAFF_ROLES=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT'];
 @Injectable() export class StaffGuard implements CanActivate {
  canActivate(ctx: ExecutionContext) { const role=ctx.switchToHttp().getRequest().user?.role; if (!STAFF_ROLES.includes(role)) throw new ForbiddenException('Staff access only'); return true; }
 }
 /** Tenant isolation: staff bypass only for platform roles; merchants pinned to their own merchantId. */
-export function assertTenant(user: any, merchantId: string) { const staff=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS']; if (staff.includes(user.role)) return; if (!user.merchantId || user.merchantId !== merchantId) throw new ForbiddenException('Cross-merchant access denied'); }
+export function assertTenant(user: any, merchantId: string) { const staff=['SUPER_ADMIN','COMPLIANCE','OPERATIONS','ACCOUNTS','SUPPORT']; if (staff.includes(user.role)) return; if (!user.merchantId || user.merchantId !== merchantId) throw new ForbiddenException('Cross-merchant access denied'); }
 @Injectable() export class ApiKeyGuard implements CanActivate { constructor(private prisma: PrismaService) {}
  // in-memory velocity windows (per instance; Redis can replace this in multi-instance deploys)
  private hits=new Map<string,number[]>(); private failedAuth=new Map<string,number[]>();

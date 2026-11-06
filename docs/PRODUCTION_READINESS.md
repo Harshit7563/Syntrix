@@ -18,13 +18,13 @@ Reviewed against git `main` after Phase 4 (metrics, JSON logs, `pg_dump` job). L
 | Auth cookies | Pass | HttpOnly, SameSite=Lax, path `/` |
 | Login rate limit | Pass | 2 attempts / minute / IP (and email when present) |
 | Empty admin login | Pass | Phase 2 removed empty `POST /auth/login` |
-| MFA on privileged login | **Fail** | TOTP setup exists; login does not require TOTP even if `mfaEnabled` |
+| MFA on privileged login | Partial | TOTP required when `mfaEnabled`; staff without MFA must enroll before other admin APIs. `/root/7563` still not IP-gated |
 | Staff password display | **Fail (accepted product choice)** | Merchant desk decrypts `loginPasswordEnc` for operators |
-| GitHub Actions on `main` | **Fail** | Recipe is `docs/github-ci.yml`; token lacked `workflow` scope |
+| GitHub Actions on `main` | Partial | `.github/workflows/ci.yml` in repo; GitHub may still ignore until token has `workflow` scope |
 | HA / multi-AZ | **Fail** | One VPS, one Postgres volume |
-| PITR + restore drill | **Fail** | Nightly gzip dump only; restore untested |
+| PITR + restore drill | **Fail** | WAL archive volume + runbook (`scripts/pitr.md`); restore drill **not** executed |
 | Central logs / alerts | **Fail** | JSON stdout; no shipper, no paging |
-| Penetration test | **Fail** | None recorded |
+| Penetration test | **Fail** | Source review only (`docs/SECURITY_REVIEW.md`). No live exploits |
 | Load test of live money paths | **Fail** | Do not run against production ORVIAN |
 | Card data / PCI DSS | Out of scope | Platform does not take PAN/CVV; do not claim PCI DSS |
 | RBI / NPCI / bank licence | Out of scope | Partner agreements only; no licence claimed here |
